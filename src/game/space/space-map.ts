@@ -1,6 +1,6 @@
 import type { ImageKey } from '../../engine/assets';
 import { circle, place, type Shape } from '../../engine/geometry';
-import { poisson, sparsePoints } from '../../engine/random';
+import { poisson, randomInt, sparsePoints } from '../../engine/random';
 import type { Point } from '../../engine/stage';
 import type { MiniGameEntry } from '../mini-games/mini-game';
 
@@ -49,7 +49,7 @@ export class Layer {
   constructor(readonly background: ImageKey) {
     const count = poisson(MAP_SIZE * MAP_SIZE * STAR_DENSITY);
     for (let i = 0; i < count; i++) {
-      this.backgroundStars.push({ x: Math.floor(Math.random() * MAP_SIZE), y: Math.floor(Math.random() * MAP_SIZE) });
+      this.backgroundStars.push({ x: randomInt(MAP_SIZE), y: randomInt(MAP_SIZE) });
     }
   }
 
@@ -99,25 +99,16 @@ export class ZodiacSign {
    * @returns whether every star has been lit up
    */
   touch(star: ZodiacStar): boolean {
-    const n = this.stars.length;
     const allTouched = this.stars.every((s) => s.touched);
+    const index = this.stars.indexOf(star);
+    const inOrder = this.stars.slice(0, index).every((s) => s.touched);
 
-    let cleared = 0;
-    for (const s of this.stars) {
-      cleared++;
-      if (s === star) break;
-      if (!s.touched) {
-        cleared = 0;
-        break;
-      }
-    }
-
-    this.lineColor = allTouched ? '#fff' : `rgba(179,179,179,${0.25 + (0.5 * cleared) / n})`;
+    // The lines get brighter the further along the constellation the rocket is.
+    const progress = inOrder ? (index + 1) / this.stars.length : 0;
+    this.lineColor = allTouched ? '#fff' : `rgba(179,179,179,${0.25 + 0.5 * progress})`;
     if (allTouched || star.touched) return allTouched;
 
-    const index = this.stars.indexOf(star);
-    const previousAllTouched = this.stars.slice(0, index).every((s) => s.touched);
-    if (previousAllTouched) {
+    if (inOrder) {
       star.touched = true;
       star.image = 'space/star-bright';
       star.imageRadius = 30;
@@ -144,13 +135,6 @@ function consecutivePairs<T>(items: readonly T[]): [T, T][] {
   return items.slice(1).flatMap((item, i): [T, T][] => {
     const previous = items.at(i);
     return previous === undefined ? [] : [[previous, item]];
-  });
-}
-
-function zip<A, B>(as: readonly A[], bs: readonly B[]): [A, B][] {
-  return as.flatMap((a, i): [A, B][] => {
-    const b = bs.at(i);
-    return b === undefined ? [] : [[a, b]];
   });
 }
 
@@ -187,9 +171,6 @@ export class SpaceMap {
       500,
       this.miniGameStars.length,
     );
-    for (const [star, point] of zip(this.miniGameStars, points)) {
-      star.x = point.x;
-      star.y = point.y;
-    }
+    this.miniGameStars.forEach((star, i) => Object.assign(star, points[i]));
   }
 }

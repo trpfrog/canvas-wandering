@@ -29,7 +29,7 @@ import { QuitScene } from './game/main-menu';
 const container = document.querySelector<HTMLElement>('#app');
 if (!container) throw new Error('#app is missing');
 
-const stage = new Stage(container);
+const stage = new Stage(container, () => stack.invalidate());
 const stack: SceneStack = new SceneStack({
   onChange(visible, bgm) {
     stage.showLayers(visible.flatMap((scene) => scene.element ?? []));

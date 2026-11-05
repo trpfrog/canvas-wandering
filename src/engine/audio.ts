@@ -13,16 +13,11 @@ const LOOP_START = {
   'se-rocket': 8,
   'se-achievement': 0,
   'se-explosion': 0,
-} as const satisfies Record<SoundId, number>;
+} as const satisfies Record<SoundId & SoundKey, number>;
 
-const SOUND_IDS: readonly (SoundId & SoundKey)[] = [
-  'bgm-menu',
-  'bgm-space',
-  'bgm-mini-game',
-  'se-rocket',
-  'se-achievement',
-  'se-explosion',
-];
+/** Needed right after the start screen; the other tracks load in the background. */
+const ESSENTIAL: readonly SoundId[] = ['bgm-menu', 'se-rocket', 'se-achievement', 'se-explosion'];
+const DEFERRED: readonly SoundId[] = ['bgm-space', 'bgm-mini-game'];
 
 interface Volume {
   bgm: number;
@@ -37,10 +32,6 @@ const isVolume = (v: unknown): v is Volume =>
   typeof v.bgm === 'number' &&
   typeof v.se === 'number';
 
-export interface SoundHandle {
-  stop(): void;
-}
-
 class AudioManager {
   private readonly ctx = new AudioContext();
   private readonly bgmGain = this.ctx.createGain();
@@ -48,8 +39,11 @@ class AudioManager {
   private readonly buffers = new Map<SoundId, AudioBuffer>();
   private volume: Volume = loadJson('volume', { bgm: 0.2, se: 0.2 }, isVolume);
 
+  /** The requested music, which may still be loading. */
+  private wantedBgm: BgmId | null = null;
   private currentBgm: { id: BgmId; source: AudioBufferSourceNode } | null = null;
-  private readonly exclusive = new Map<SeId, SoundHandle>();
+  /** Each sound effect plays at most once at a time; playing it again restarts it. */
+  private readonly playingSe = new Map<SeId, AudioBufferSourceNode>();
 
   constructor() {
     this.bgmGain.connect(this.ctx.destination);
@@ -57,14 +51,15 @@ class AudioManager {
     this.applyVolume();
   }
 
+  /** Loads what the menu needs and keeps loading the rest in the background. */
   async load(): Promise<void> {
-    await Promise.all(
-      SOUND_IDS.map(async (id) => {
-        const res = await fetch(soundUrl(id));
-        const buffer = await this.ctx.decodeAudioData(await res.arrayBuffer());
-        this.buffers.set(id, buffer);
-      }),
-    );
+    await Promise.all(ESSENTIAL.map(async (id) => this.loadSound(id)));
+    for (const id of DEFERRED) void this.loadSound(id).then(() => this.playBgm(this.wantedBgm));
+  }
+
+  private async loadSound(id: SoundId): Promise<void> {
+    const res = await fetch(soundUrl(id));
+    this.buffers.set(id, await this.ctx.decodeAudioData(await res.arrayBuffer()));
   }
 
   /** Must be called from a user gesture so that the browser allows playback. */
@@ -99,8 +94,12 @@ class AudioManager {
     return source;
   }
 
-  /** Switches the background music. Keeps playing if the same track is requested. */
+  /**
+   * Switches the background music. Keeps playing if the same track is requested;
+   * a track that is still loading starts as soon as it is ready.
+   */
   playBgm(id: BgmId | null): void {
+    this.wantedBgm = id;
     if (this.currentBgm?.id === id) return;
     this.currentBgm?.source.stop();
     this.currentBgm = null;
@@ -112,40 +111,26 @@ class AudioManager {
   }
 
   /**
-   * Plays a sound effect.
-   * @param options.loop `true` to loop forever, or the number of extra repetitions
-   * @param options.exclusive stop the previous instance of the same sound first
+   * Plays a sound effect from the start, stopping it first if it is already playing.
+   * @param loop `true` to loop until stopped, or the number of extra repetitions
    */
-  playSe(
-    id: SeId,
-    { loop = false, exclusive = false }: { loop?: boolean | number; exclusive?: boolean } = {},
-  ): SoundHandle {
-    if (exclusive) this.exclusive.get(id)?.stop();
-
+  playSe(id: SeId, { loop = false }: { loop?: boolean | number } = {}): void {
+    this.stopSe(id);
     const source = this.createSource(`se-${id}`, this.seGain, loop !== false);
-    if (!source) return { stop() {} };
+    if (!source) return;
     source.start();
     if (typeof loop === 'number') {
       source.stop(this.ctx.currentTime + (source.buffer?.duration ?? 0) * (loop + 1));
     }
-
-    let stopped = false;
-    const handle: SoundHandle = {
-      stop() {
-        if (stopped) return;
-        stopped = true;
-        source.stop();
-      },
-    };
     source.addEventListener('ended', () => {
-      stopped = true;
+      if (this.playingSe.get(id) === source) this.playingSe.delete(id);
     });
-    if (exclusive) this.exclusive.set(id, handle);
-    return handle;
+    this.playingSe.set(id, source);
   }
 
   stopSe(id: SeId): void {
-    this.exclusive.get(id)?.stop();
+    this.playingSe.get(id)?.stop();
+    this.playingSe.delete(id);
   }
 }
 

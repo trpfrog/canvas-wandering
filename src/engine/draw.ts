@@ -48,3 +48,30 @@ export function createOffscreen(w: number, h: number, scale = 2): [HTMLCanvasEle
 }
 
 export const rgba = (r: number, g: number, b: number, a255: number): string => `rgba(${r},${g},${b},${a255 / 255})`;
+
+/**
+ * Covers the rectangle (0, 0)–(width, height) with copies of `image` drawn at `size`×`size`,
+ * starting at (x0, y0), which should be at or left/above the origin.
+ */
+export function drawTiled(
+  ctx: CanvasRenderingContext2D,
+  image: CanvasImageSource,
+  size: number,
+  area: { width: number; height: number },
+  x0 = 0,
+  y0 = 0,
+): void {
+  for (let x = x0; x <= area.width; x += size) {
+    for (let y = y0; y <= area.height; y += size) ctx.drawImage(image, x, y, size, size);
+  }
+}
+
+/** Draws text horizontally centered on x. */
+export function fillTextCentered(ctx: CanvasRenderingContext2D, text: string, x: number, y: number): void {
+  const { textAlign } = ctx;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, x, y);
+  ctx.textAlign = textAlign;
+}
+
+export const pad2 = (n: number): string => String(n).padStart(2, '0');

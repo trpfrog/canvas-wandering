@@ -7,7 +7,7 @@ function fakeScene(name: string, opaque: boolean, bgm?: Scene['bgm']): Scene & {
     opaque,
     bgm,
     log,
-    resume: (popped) => log.push(`${name}:resume(${popped === null ? '-' : 'popped'})`),
+    resume: () => log.push(`${name}:resume`),
     suspend: () => log.push(`${name}:suspend`),
     dispose: () => log.push(`${name}:dispose`),
   };
@@ -27,8 +27,8 @@ describe('SceneStack', () => {
     stack.push(a);
     stack.push(b);
     stack.pop();
-    expect(a.log).toEqual(['a:resume(-)', 'a:suspend', 'a:resume(popped)']);
-    expect(b.log).toEqual(['b:resume(-)', 'b:suspend', 'b:dispose']);
+    expect(a.log).toEqual(['a:resume', 'a:suspend', 'a:resume']);
+    expect(b.log).toEqual(['b:resume', 'b:suspend', 'b:dispose']);
   });
 
   it('only resumes the topmost of scenes pushed together', () => {
@@ -37,7 +37,7 @@ describe('SceneStack', () => {
     const dialog = fakeScene('dialog', false);
     stack.push(game, dialog);
     expect(game.log).toEqual([]);
-    expect(dialog.log).toEqual(['dialog:resume(-)']);
+    expect(dialog.log).toEqual(['dialog:resume']);
   });
 
   it('shows the topmost opaque scene and everything above it', () => {

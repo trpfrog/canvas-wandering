@@ -1,5 +1,6 @@
 import { FONT_TITLE, FONT_DIGITAL } from '../../engine/assets';
-import { createOffscreen, rgba } from '../../engine/draw';
+import { createOffscreen, fillCircle, fillTextCentered, pad2, rgba } from '../../engine/draw';
+import { clamp, toRadians } from '../../engine/geometry';
 import { HEIGHT, WIDTH } from '../../engine/stage';
 import { CHUNKS, MAP_SIZE, type Layer } from './space-map';
 
@@ -10,108 +11,132 @@ const MARGIN = 5;
 const BAR_HEIGHT = FONT_SIZE + MARGIN * 4;
 const VALUE_FONT = `bold ${Math.trunc(FONT_SIZE * 0.7)}px ${FONT_DIGITAL}`;
 
-let barImage: HTMLCanvasElement | null = null;
+const BOX_Y = MARGIN * 3;
+const BOX_H = FONT_SIZE;
 
-function getBarImage(): HTMLCanvasElement {
-  if (barImage) return barImage;
-  const [canvas, ctx] = createOffscreen(WIDTH, BAR_HEIGHT);
-  const gradient = ctx.createLinearGradient(0, 0, 0, BAR_HEIGHT);
-  gradient.addColorStop(0, 'rgb(76,76,76)');
-  gradient.addColorStop(0.95, 'rgb(26,26,26)');
-  gradient.addColorStop(1, '#000');
-  ctx.fillStyle = gradient;
+interface Box {
+  title: string;
+  x: number;
+  width: number;
+}
+
+/** The value boxes, laid out once from the widest text each can show. */
+function layoutBoxes(ctx: CanvasRenderingContext2D): Record<'x' | 'y' | 'depth' | 'clock' | 'cleared', Box> {
+  ctx.font = VALUE_FONT;
+  const width = (sample: string) => ctx.measureText(sample).width;
+  const clockWidth = width('00:00') + MARGIN + 5;
+  const clockX = WIDTH - clockWidth - 20;
+  const clearedWidth = width('0') + MARGIN + 5;
+  return {
+    x: { title: 'X-AXIS', x: 20, width: width('999990') - MARGIN },
+    y: { title: 'Y-AXIS', x: 125, width: width('999990') - MARGIN },
+    depth: { title: 'DEPTH', x: 230, width: width('90') - MARGIN },
+    clock: { title: 'CLOCK', x: clockX, width: clockWidth },
+    cleared: { title: 'CLEARED', x: clockX - 10 - clearedWidth, width: clearedWidth },
+  };
+}
+
+function boxPath(ctx: CanvasRenderingContext2D, box: Box, offsetY = 0): void {
+  ctx.beginPath();
+  ctx.roundRect(box.x, BOX_Y + offsetY, box.width, BOX_H, 5);
+}
+
+/** The bar, the title and the empty value boxes: everything under the values. */
+function drawBack(ctx: CanvasRenderingContext2D, boxes: readonly Box[]): void {
+  const bar = ctx.createLinearGradient(0, 0, 0, BAR_HEIGHT);
+  bar.addColorStop(0, 'rgb(76,76,76)');
+  bar.addColorStop(0.95, 'rgb(26,26,26)');
+  bar.addColorStop(1, '#000');
+  ctx.fillStyle = bar;
   ctx.fillRect(0, 0, WIDTH, BAR_HEIGHT);
 
   ctx.font = `${FONT_SIZE}px ${FONT_TITLE}`;
   ctx.fillStyle = rgba(0xcd, 0xcd, 0xcd, 0x75);
-  ctx.textAlign = 'center';
-  ctx.fillText('Space Wandering', WIDTH / 2, (BAR_HEIGHT + FONT_SIZE) / 2 - MARGIN);
-  barImage = canvas;
-  return canvas;
-}
-
-function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, r);
-}
-
-/** Draws one LCD-like value box with a title above it. */
-function drawValueBox(ctx: CanvasRenderingContext2D, x: number, width: number, title: string, value: string): void {
-  const y = MARGIN * 3;
-  const h = FONT_SIZE;
+  fillTextCentered(ctx, 'Space Wandering', WIDTH / 2, (BAR_HEIGHT + FONT_SIZE) / 2 - MARGIN);
 
   const base = ctx.createLinearGradient(0, 0, 0, BAR_HEIGHT);
   base.addColorStop(0, '#000');
   base.addColorStop(1, 'rgb(17,17,17)');
-  ctx.fillStyle = base;
-  roundRectPath(ctx, x, y, width, h, 5);
-  ctx.fill();
-
   ctx.font = `${2 * MARGIN}px monospace`;
-  ctx.fillStyle = 'gray';
-  ctx.textAlign = 'center';
-  ctx.fillText(title, x + width / 2, MARGIN * 2.5);
+  for (const box of boxes) {
+    ctx.fillStyle = base;
+    boxPath(ctx, box);
+    ctx.fill();
+    ctx.fillStyle = 'gray';
+    fillTextCentered(ctx, box.title, box.x + box.width / 2, MARGIN * 2.5);
+  }
+}
 
-  ctx.font = VALUE_FONT;
-  ctx.fillStyle = '#0f0';
-  ctx.textAlign = 'right';
-  ctx.fillText(value, x + width - MARGIN, y + h - 5);
-
-  // Glare
-  ctx.save();
-  roundRectPath(ctx, x, y, width, h, 5);
-  ctx.clip();
-  const upperBottom = y + h - (FONT_SIZE / 5) * 3;
-  const upper = ctx.createLinearGradient(0, y, 0, upperBottom);
+/** The glass glare and outline drawn over the values. */
+function drawFront(ctx: CanvasRenderingContext2D, boxes: readonly Box[]): void {
+  const glareHeight = (FONT_SIZE / 5) * 3;
+  const upper = ctx.createLinearGradient(0, BOX_Y, 0, BOX_Y + BOX_H - glareHeight);
   upper.addColorStop(0, 'rgba(255,255,255,0.27)');
   upper.addColorStop(1, 'rgba(255,255,255,0.07)');
-  ctx.fillStyle = upper;
-  roundRectPath(ctx, x, y - (FONT_SIZE / 5) * 3, width, h, 5);
-  ctx.fill();
-  const lowerTop = y + FONT_SIZE / 2;
-  const lower = ctx.createLinearGradient(0, lowerTop, 0, lowerTop + h);
+  const lowerTop = BOX_Y + FONT_SIZE / 2;
+  const lower = ctx.createLinearGradient(0, lowerTop, 0, lowerTop + BOX_H);
   lower.addColorStop(0, 'rgba(255,255,255,0)');
   lower.addColorStop(1, 'rgba(255,255,255,0.42)');
-  ctx.fillStyle = lower;
-  ctx.fillRect(x, lowerTop, width, h);
-  ctx.restore();
 
-  ctx.strokeStyle = '#000';
-  ctx.lineWidth = 1;
-  roundRectPath(ctx, x, y, width, h, 5);
-  ctx.stroke();
+  for (const box of boxes) {
+    ctx.save();
+    boxPath(ctx, box);
+    ctx.clip();
+    ctx.fillStyle = upper;
+    boxPath(ctx, box, -glareHeight);
+    ctx.fill();
+    ctx.fillStyle = lower;
+    ctx.fillRect(box.x, lowerTop, box.width, BOX_H);
+    ctx.restore();
+
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 1;
+    boxPath(ctx, box);
+    ctx.stroke();
+  }
 }
 
-function textWidth(ctx: CanvasRenderingContext2D, text: string): number {
-  ctx.font = VALUE_FONT;
-  return ctx.measureText(text).width;
+let indicator: { back: HTMLCanvasElement; front: HTMLCanvasElement; boxes: ReturnType<typeof layoutBoxes> } | null =
+  null;
+
+/** Everything but the values is drawn once (fonts must be loaded by then). */
+function getIndicator(): NonNullable<typeof indicator> {
+  if (indicator) return indicator;
+  const [back, backCtx] = createOffscreen(WIDTH, BAR_HEIGHT);
+  const [front, frontCtx] = createOffscreen(WIDTH, BAR_HEIGHT);
+  const boxes = layoutBoxes(backCtx);
+  drawBack(backCtx, Object.values(boxes));
+  drawFront(frontCtx, Object.values(boxes));
+  indicator = { back, front, boxes };
+  return indicator;
 }
 
-function drawNumber(ctx: CanvasRenderingContext2D, x: number, title: string, value: number, digits: number): void {
-  const widest = String(10 ** (digits + 1) - 10);
-  let str = String(Math.trunc(value));
-  if (str.length > digits) str = str.slice(str.length - digits);
-  drawValueBox(ctx, x, textWidth(ctx, widest) - MARGIN, title, str);
-}
+/** Keeps only the last `digits` digits, like a mechanical counter. */
+const lastDigits = (value: number, digits: number): string => String(Math.trunc(value)).slice(-digits);
 
+/** The LCD-like bar at the top of the screen. */
 export function drawIndicator(
   ctx: CanvasRenderingContext2D,
   state: { x: number; y: number; depth: number; medals: number },
 ): void {
-  ctx.drawImage(getBarImage(), 0, 0, WIDTH, BAR_HEIGHT);
-  drawNumber(ctx, 20, 'X-AXIS', state.x, 5);
-  drawNumber(ctx, 125, 'Y-AXIS', state.y, 5);
-  drawNumber(ctx, 230, 'DEPTH', state.depth, 1);
+  const { back, front, boxes } = getIndicator();
+  ctx.drawImage(back, 0, 0, WIDTH, BAR_HEIGHT);
 
   const now = new Date();
-  const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const clockWidth = textWidth(ctx, time) + MARGIN + 5;
-  const clockX = WIDTH - clockWidth - 20;
-  drawValueBox(ctx, clockX, clockWidth, 'CLOCK', time);
+  const values: [Box, string][] = [
+    [boxes.x, lastDigits(state.x, 5)],
+    [boxes.y, lastDigits(state.y, 5)],
+    [boxes.depth, lastDigits(state.depth, 1)],
+    [boxes.clock, `${pad2(now.getHours())}:${pad2(now.getMinutes())}`],
+    [boxes.cleared, String(state.medals)],
+  ];
+  ctx.font = VALUE_FONT;
+  ctx.fillStyle = '#0f0';
+  ctx.textAlign = 'right';
+  for (const [box, value] of values) ctx.fillText(value, box.x + box.width - MARGIN, BOX_Y + BOX_H - 5);
+  ctx.textAlign = 'left';
 
-  const cleared = String(state.medals);
-  const clearedWidth = textWidth(ctx, cleared) + MARGIN + 5;
-  drawValueBox(ctx, clockX - 10 - clearedWidth, clearedWidth, 'CLEARED', cleared);
+  ctx.drawImage(front, 0, 0, WIDTH, BAR_HEIGHT);
 }
 
 // ---------------------------------------------------------------- mini map
@@ -122,8 +147,7 @@ const MINI_X = WIDTH - 10 - MINI_SIZE;
 const MINI_Y = HEIGHT - 10 - MINI_SIZE;
 
 export function drawMiniMap(ctx: CanvasRenderingContext2D, layer: Layer, rocket: { x: number; y: number }): void {
-  const toMini = (v: number, offset: number) =>
-    offset + Math.min(MINI_SIZE, Math.max(0, Math.trunc((v * MINI_SIZE) / MAP_SIZE)));
+  const toMini = (v: number, offset: number) => offset + clamp(Math.trunc((v * MINI_SIZE) / MAP_SIZE), 0, MINI_SIZE);
 
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = '#fff';
@@ -134,9 +158,7 @@ export function drawMiniMap(ctx: CanvasRenderingContext2D, layer: Layer, rocket:
 
   const dot = (x: number, y: number, r: number, color: string) => {
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(toMini(x, MINI_X), toMini(y, MINI_Y), r, 0, Math.PI * 2);
-    ctx.fill();
+    fillCircle(ctx, toMini(x, MINI_X), toMini(y, MINI_Y), r);
   };
 
   for (const star of layer.eventStars) dot(star.x, star.y, 3, '#ff0');
@@ -168,9 +190,7 @@ function getSpeedBackground(): HTMLCanvasElement {
   ctx.translate(0, size - HEIGHT);
 
   ctx.fillStyle = rgba(0x11, 0x10, 0x10, 0xcc);
-  ctx.beginPath();
-  ctx.arc(SPEED_CX, SPEED_CY, SPEED_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
+  fillCircle(ctx, SPEED_CX, SPEED_CY, SPEED_RADIUS);
 
   const r = SPEED_RADIUS - SPEED_MARGIN;
   ctx.strokeStyle = '#00A2BF';
@@ -179,7 +199,7 @@ function getSpeedBackground(): HTMLCanvasElement {
   ctx.arc(SPEED_CX, SPEED_CY, r, -Math.PI / 2, 0);
   ctx.stroke();
   for (let deg = 0; deg <= 90; deg += 10) {
-    const rad = (deg * Math.PI) / 180;
+    const rad = toRadians(deg);
     const x2 = SPEED_CX + r * Math.cos(rad);
     const y2 = SPEED_CY - r * Math.sin(rad);
     const x1 = (SPEED_CX + 10 * x2) / 11;
@@ -197,8 +217,7 @@ export function drawSpeedometer(ctx: CanvasRenderingContext2D, speed: number, ma
   const size = SPEED_RADIUS + SPEED_MARGIN;
   ctx.drawImage(getSpeedBackground(), 0, HEIGHT - size, size, size);
 
-  const deg = Math.trunc((speed / maxSpeed) * 90);
-  const rad = (deg * Math.PI) / 180;
+  const rad = toRadians(Math.trunc((speed / maxSpeed) * 90));
   const r = SPEED_RADIUS - SPEED_MARGIN;
   ctx.strokeStyle = '#f00';
   ctx.lineWidth = 1;
@@ -208,7 +227,5 @@ export function drawSpeedometer(ctx: CanvasRenderingContext2D, speed: number, ma
   ctx.stroke();
 
   ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.arc(SPEED_CX, SPEED_CY, 20, 0, Math.PI * 2);
-  ctx.fill();
+  fillCircle(ctx, SPEED_CX, SPEED_CY, 20);
 }

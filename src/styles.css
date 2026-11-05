@@ -44,7 +44,6 @@ body {
   top: 50%;
   width: 1024px;
   height: 768px;
-  transform-origin: center;
   overflow: hidden;
 }
 
@@ -149,17 +148,17 @@ body {
 
 /* ------------------------------------------------------------------ main menu */
 
-.main-menu {
-  inset: auto !important;
-  left: 362px !important;
-  top: 384px !important;
+.main-menu-buttons {
+  position: absolute;
+  left: 362px;
+  top: 384px;
   width: 300px;
   height: 200px;
   display: grid;
   grid-template-rows: repeat(4, 1fr);
 }
 
-.main-menu .btn {
+.main-menu-buttons .btn {
   font-size: 30px;
   font-weight: bold;
   border-radius: 4px;
@@ -171,11 +170,10 @@ body {
   pointer-events: auto;
 }
 
-.transition-bar {
+.transition-hole {
   position: absolute;
-  left: 0;
-  top: 0;
-  background: #000;
+  /* Everything around the hole is black. */
+  box-shadow: 0 0 0 2048px #000;
 }
 
 /* ------------------------------------------------------------------ dialogs */
@@ -187,7 +185,7 @@ body {
   pointer-events: auto;
 }
 
-.dialog-backdrop.rich {
+.dialog-backdrop.menu {
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
@@ -209,7 +207,7 @@ body {
   background: linear-gradient(rgb(0 15 62), rgb(2 31 106));
 }
 
-.pause-title {
+.dialog-title {
   font-size: 40px;
   color: var(--sky);
   text-align: center;
@@ -224,8 +222,6 @@ body {
 
 .settings-title {
   font-size: 50px;
-  color: var(--sky);
-  text-align: center;
 }
 
 .volume-settings {
@@ -244,7 +240,6 @@ body {
 .volume-row input {
   width: 100%;
   accent-color: var(--navy);
-  pointer-events: auto;
 }
 
 .medals-title {
@@ -456,5 +451,4 @@ body {
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid #888;
-  pointer-events: auto;
 }

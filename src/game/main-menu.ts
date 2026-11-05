@@ -1,8 +1,9 @@
 import { FONT_TITLE, img, type ImageKey } from '../engine/assets';
+import { fillTextCentered } from '../engine/draw';
 import { pick } from '../engine/random';
 import type { Scene } from '../engine/scene';
 import { HEIGHT, WIDTH } from '../engine/stage';
-import { scenes } from './context';
+import { SceneTag, scenes } from './context';
 import { SpaceScene } from './space/space-scene';
 import { button, h } from './ui/dom';
 import { createMedalCollectionDialog, createSettingsDialog } from './ui/dialogs';
@@ -17,44 +18,35 @@ const STAR_IMAGES: readonly [ImageKey, ...ImageKey[]] = ['space/star-bright', 's
 const TITLE = 'Space Wandering!!';
 
 export class MainMenuScene implements Scene {
-  readonly tag = 'main-menu';
+  readonly tag = SceneTag.mainMenu;
   readonly opaque = true;
   readonly bgm = 'menu';
-  readonly element: HTMLElement;
+  readonly element = h(
+    'div',
+    {},
+    h(
+      'div',
+      { class: 'main-menu-buttons' },
+      button('START', () => scenes().push(new SpaceScene())),
+      button('SETTINGS', () => scenes().push(createSettingsDialog())),
+      button('MEDALS', () => scenes().push(createMedalCollectionDialog())),
+      button('QUIT', () => scenes().pop()),
+    ),
+  );
 
   private readonly background = pick(BACKGROUNDS);
   /** The background slowly zooms in (1 px every 50 ms, as in the original). */
   private zoom = 0;
-  private twinkle = { x: 0, y: 0, image: STAR_IMAGES[0], elapsed: 0 };
-  private readonly start: HTMLButtonElement;
-  private readonly quit: HTMLButtonElement;
-
-  constructor() {
-    this.start = button('START', () => scenes().push(new SpaceScene()));
-    this.quit = button('QUIT', () => scenes().pop());
-    this.element = h(
-      'div',
-      { class: 'main-menu' },
-      this.start,
-      button('SETTINGS', () => scenes().push(createSettingsDialog())),
-      button('MEDALS', () => scenes().push(createMedalCollectionDialog())),
-      this.quit,
-    );
-    this.moveTwinkle();
-  }
-
-  private moveTwinkle(): void {
-    this.twinkle.x = Math.random() * WIDTH;
-    this.twinkle.y = Math.random() * (HEIGHT / 2);
-    this.twinkle.image = pick(STAR_IMAGES);
-  }
+  /** A star that blinks at a random place in the upper half every 50 ms. */
+  private twinkle = randomTwinkle();
+  private twinkleMs = 0;
 
   update(dt: number): void {
     this.zoom += dt / 50;
-    this.twinkle.elapsed += dt;
-    if (this.twinkle.elapsed >= 50) {
-      this.twinkle.elapsed = 0;
-      this.moveTwinkle();
+    this.twinkleMs += dt;
+    if (this.twinkleMs >= 50) {
+      this.twinkleMs = 0;
+      this.twinkle = randomTwinkle();
     }
   }
 
@@ -70,20 +62,15 @@ export class MainMenuScene implements Scene {
 
     ctx.font = `${fontSize}px ${FONT_TITLE}`;
     ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.fillText(TITLE, WIDTH / 2, 200);
-  }
-
-  resume(): void {
-    this.start.disabled = false;
-    this.quit.disabled = false;
-  }
-
-  suspend(): void {
-    this.start.disabled = true;
-    this.quit.disabled = true;
+    fillTextCentered(ctx, TITLE, WIDTH / 2, 200);
   }
 }
+
+const randomTwinkle = () => ({
+  x: Math.random() * WIDTH,
+  y: Math.random() * (HEIGHT / 2),
+  image: pick(STAR_IMAGES),
+});
 
 /** Shown after QUIT, since a web page cannot close itself. */
 export class QuitScene implements Scene {

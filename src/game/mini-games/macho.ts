@@ -2,13 +2,11 @@
  * マッチョ星雲 — ported from the unmerged upstream PR trpfrog/medipro-game#273.
  */
 import { img } from '../../engine/assets';
-import { toRadians } from '../../engine/geometry';
-import type { PointerInput } from '../../engine/scene';
+import { fillTextCentered } from '../../engine/draw';
+import { clamp, toRadians } from '../../engine/geometry';
 import { HEIGHT, WIDTH, type Point } from '../../engine/stage';
-import { scenes } from '../context';
 import { MEDALS } from '../medals';
-import { createGameOverDialog, pushMedalWindow } from '../ui/dialogs';
-import type { MiniGame, MiniGameEntry } from './mini-game';
+import { MiniGameScene, type MiniGameEntry } from './mini-game';
 
 const GAME_MS = 10_000;
 const MAX_ANGLE = 150;
@@ -17,14 +15,21 @@ const PX_PER_DEGREE = 256;
 const ELBOW: Point = { x: 512 - 32 + 140, y: 512 + 32 };
 
 /** Bend the arm all the way up by dragging to the right, again and again, in 10 seconds. */
-class Macho implements MiniGame {
+class Macho extends MiniGameScene {
   private angle = 0;
   private best = 0;
   private remainingMs = GAME_MS;
-  private released = false;
   private drag: { startX: number; startAngle: number } | null = null;
 
-  pointerDown(p: PointerInput): void {
+  constructor() {
+    super({
+      title: 'YOUR MUSCLE',
+      background: 'rgba(224,29,0,0.53)',
+      medal: { def: MEDALS.macho, minScore: 100 },
+    });
+  }
+
+  pointerDown(p: Point): void {
     this.drag = { startX: p.x, startAngle: this.angle };
   }
 
@@ -33,10 +38,10 @@ class Macho implements MiniGame {
   }
 
   pointerMove(p: Point): void {
-    if (!this.drag || this.released) return;
+    if (!this.drag || this.isOver) return;
     // Only whole degrees count, so short drags do nothing: it takes muscle.
     const delta = Math.trunc((p.x - this.drag.startX) / PX_PER_DEGREE);
-    this.angle = Math.min(MAX_ANGLE, Math.max(0, this.drag.startAngle + delta));
+    this.angle = clamp(this.drag.startAngle + delta, 0, MAX_ANGLE);
   }
 
   private percentage(): number {
@@ -44,22 +49,9 @@ class Macho implements MiniGame {
   }
 
   update(dt: number): void {
-    if (this.released) {
-      this.angle /= 2;
-      return;
-    }
     this.remainingMs = Math.max(0, this.remainingMs - dt);
     this.best = Math.max(this.best, this.percentage());
-    if (this.remainingMs === 0) {
-      this.released = true;
-      this.endGame();
-    }
-  }
-
-  private endGame(): void {
-    const best = Math.floor(this.best);
-    scenes().push(createGameOverDialog('YOUR MUSCLE', best, 'rgba(224,29,0,0.53)'));
-    if (best >= 100) pushMedalWindow(MEDALS.macho);
+    if (this.remainingMs === 0) this.end(Math.floor(this.best));
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -79,9 +71,7 @@ class Macho implements MiniGame {
     const count = String(Math.round(this.remainingMs));
     ctx.fillStyle = '#fff';
     ctx.font = '100px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(count, WIDTH / 2, 100);
-    ctx.textAlign = 'left';
+    fillTextCentered(ctx, count, WIDTH / 2, 100);
   }
 
   private drawGauge(ctx: CanvasRenderingContext2D): void {
@@ -99,7 +89,6 @@ class Macho implements MiniGame {
 }
 
 export const macho: MiniGameEntry = {
-  id: 'macho',
   depth: 0,
   title: 'マッチョ星雲',
   creator: 'Created by キン肉一世',

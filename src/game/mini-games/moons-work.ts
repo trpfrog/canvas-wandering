@@ -1,11 +1,15 @@
 import { img } from '../../engine/assets';
-import { audio, type SoundHandle } from '../../engine/audio';
-import { drawRotated, fillCircle } from '../../engine/draw';
+import { audio } from '../../engine/audio';
+import { drawRotated, fillCircle, fillTextCentered } from '../../engine/draw';
 import {
+  advance,
   bounds,
   circle,
   circleContainsRect,
+  distance,
+  type Heading,
   intersects,
+  onCircle,
   place,
   polygon,
   toDegrees,
@@ -16,11 +20,10 @@ import {
 import { input } from '../../engine/input';
 import { randomInt } from '../../engine/random';
 import { HEIGHT, WIDTH, type Point } from '../../engine/stage';
-import { scenes } from '../context';
-import { ROCKET_OUTLINE } from '../rocket-outline';
 import { MEDALS } from '../medals';
-import { createGameOverDialog, pushMedalWindow } from '../ui/dialogs';
-import type { MiniGame, MiniGameEntry } from './mini-game';
+import { ROCKET_OUTLINE } from '../rocket-outline';
+import { MiniGameScene, type MiniGameEntry } from './mini-game';
+import { drawStarryBackground } from './starry-background';
 
 const CENTER: Point = { x: WIDTH / 2, y: HEIGHT / 2 };
 const ORBIT_RADIUS = 200;
@@ -30,7 +33,6 @@ const METEORITE_RADIUS = 26;
 /** Objects appear on this circle around the earth, just outside the screen. */
 const SPAWN_RADIUS = Math.hypot(WIDTH, HEIGHT) / 2 + 50;
 const MAX_LIVES = 3;
-const MEDAL_SCORE = 50;
 const GAME_OVER_DELAY_MS = 3000;
 
 /** Same outline as the player's rocket, at 70 % size. */
@@ -38,18 +40,9 @@ const ROCKET_HIT_BOX = polygon(
   ROCKET_OUTLINE.map(([x, y]) => [Math.trunc((x * 7) / 10), Math.trunc((y * 7) / 10)] as const),
 );
 
-const distanceFromEarth = (p: Point): number => Math.hypot(p.x - CENTER.x, p.y - CENTER.y);
+const distanceFromEarth = (p: Point): number => distance(p, CENTER);
 
-interface Mover {
-  x: number;
-  y: number;
-  /** Heading in degrees. */
-  angle: number;
-  /** px per second */
-  speed: number;
-}
-
-interface Rocket extends Mover {
+interface Rocket extends Heading {
   /** Rockets leaving the earth never land; returning ones heal once they land. */
   readonly leaving: boolean;
 }
@@ -77,32 +70,26 @@ function drawExplosion(ctx: CanvasRenderingContext2D, e: Explosion, now: number)
 
 const isExplosionOver = (e: Explosion, now: number) => ((now - e.startedAt) * e.fps) / 1000 >= EXPLOSION.frames;
 
-/** The starry background shared with Shooting Star. */
-export function drawTiledBackground(ctx: CanvasRenderingContext2D): void {
-  const size = 500;
-  for (let x = 0; x <= WIDTH; x += size) {
-    for (let y = 0; y <= HEIGHT; y += size) ctx.drawImage(img('moons-work/background'), x, y, size, size);
-  }
-}
-
 // ---------------------------------------------------------------- game
 
 /** Move the moon around its orbit to protect the earth from meteorites, without hitting rockets. */
-class MoonsWork implements MiniGame {
+class MoonsWork extends MiniGameScene {
   private now = 0;
   private spawnTimer = 0;
   private moon: Point = { ...CENTER };
-  private meteorites: Mover[] = [];
+  private meteorites: Heading[] = [];
   private rockets: Rocket[] = [];
   private explosions: Explosion[] = [];
   private score = 0;
   private lives = MAX_LIVES;
   private earthExplosion: Explosion | null = null;
-  private gameOverAt: number | null = null;
-  private ended = false;
-  private explosionSound: SoundHandle | null = null;
 
   constructor() {
+    super({
+      title: 'GAME OVER',
+      background: 'rgba(118,34,0,0.71)',
+      medal: { def: MEDALS.moonsWork, minScore: 50 },
+    });
     this.moveMoon(input.pointer);
   }
 
@@ -112,24 +99,20 @@ class MoonsWork implements MiniGame {
 
   /** The moon stays on its orbit, on the side the pointer is. */
   private moveMoon(p: Point): void {
-    const angle = Math.atan2(p.y - CENTER.y, p.x - CENTER.x);
-    this.moon = {
-      x: CENTER.x + Math.trunc(ORBIT_RADIUS * Math.cos(angle)),
-      y: CENTER.y + Math.trunc(ORBIT_RADIUS * Math.sin(angle)),
-    };
+    this.moon = onCircle(CENTER, ORBIT_RADIUS, Math.atan2(p.y - CENTER.y, p.x - CENTER.x));
   }
 
   dispose(): void {
-    this.explosionSound?.stop();
+    audio.stopSe('explosion');
   }
 
   // ------------------------------------------------------------ hit boxes
 
   private moonHitBox = (): Shape => place(circle(MOON_RADIUS), this.moon.x, this.moon.y);
   private earthHitBox = () => ({ kind: 'circle', cx: CENTER.x, cy: CENTER.y, r: EARTH_RADIUS }) as const;
-  private meteoriteHitBox = (m: Mover): Shape => place(circle(METEORITE_RADIUS), m.x, m.y);
+  private meteoriteHitBox = (m: Heading): Shape => place(circle(METEORITE_RADIUS), m.x, m.y);
   private rocketHitBox = (r: Rocket): Shape => place(ROCKET_HIT_BOX, r.x, r.y, toRadians(r.angle));
-  private isTooFar = (m: Mover) => Math.hypot(m.x - CENTER.x, m.y - CENTER.y) > SPAWN_RADIUS + 10;
+  private isTooFar = (m: Heading) => distanceFromEarth(m) > SPAWN_RADIUS + 10;
 
   // ------------------------------------------------------------ simulation
 
@@ -146,7 +129,7 @@ class MoonsWork implements MiniGame {
     this.updateRockets(dt);
     this.explosions = this.explosions.filter((e) => !isExplosionOver(e, this.now));
 
-    if (this.gameOverAt !== null && this.now >= this.gameOverAt && !this.ended) this.endGame();
+    if (this.earthExplosion && this.now >= this.earthExplosion.startedAt + GAME_OVER_DELAY_MS) this.end(this.score);
   }
 
   private spawn(): void {
@@ -162,10 +145,8 @@ class MoonsWork implements MiniGame {
   }
 
   /** Something that appears at the edge and heads to the earth. */
-  private fromOutside({ speed }: { speed: number }): Mover {
-    const theta = Math.random() * Math.PI * 2;
-    const x = Math.trunc(SPAWN_RADIUS * Math.cos(theta) + CENTER.x);
-    const y = Math.trunc(SPAWN_RADIUS * Math.sin(theta) + CENTER.y);
+  private fromOutside({ speed }: { speed: number }): Heading {
+    const { x, y } = onCircle(CENTER, SPAWN_RADIUS, Math.random() * Math.PI * 2);
     return { x, y, angle: toDegrees(Math.atan2(CENTER.y - y, CENTER.x - x)), speed };
   }
 
@@ -182,7 +163,7 @@ class MoonsWork implements MiniGame {
       }
       if (hitsEarth) this.destroyEarth();
       if (hitsMoon || hitsEarth || this.isTooFar(m)) return false;
-      move(m, dt);
+      advance(m, dt);
       return true;
     });
   }
@@ -200,7 +181,7 @@ class MoonsWork implements MiniGame {
         this.explode(bounds(hitBox));
       }
       if (landed || hitsMoon || this.isTooFar(r)) return false;
-      move(r, dt);
+      advance(r, dt);
       return true;
     });
   }
@@ -218,20 +199,13 @@ class MoonsWork implements MiniGame {
       fps: 40,
       alpha: 0.5,
     });
-    if (!this.earthExplosion) audio.playSe('explosion', { exclusive: true });
+    if (!this.earthExplosion) audio.playSe('explosion');
   }
 
   private destroyEarth(): void {
     if (this.earthExplosion) return;
     this.earthExplosion = { rect: { x: 0, y: 0, w: WIDTH, h: HEIGHT }, startedAt: this.now, fps: 20, alpha: 1 };
-    this.gameOverAt = this.now + GAME_OVER_DELAY_MS;
-    this.explosionSound = audio.playSe('explosion', { exclusive: true, loop: 10 });
-  }
-
-  private endGame(): void {
-    this.ended = true;
-    scenes().push(createGameOverDialog('GAME OVER', this.score, 'rgba(118,34,0,0.71)'));
-    if (this.score >= MEDAL_SCORE) pushMedalWindow(MEDALS.moonsWork);
+    audio.playSe('explosion', { loop: 10 });
   }
 
   /** 0: safe … 3: a meteorite is inside the orbit. */
@@ -240,7 +214,7 @@ class MoonsWork implements MiniGame {
     const approaching = this.meteorites.some(
       (m) =>
         distanceFromEarth(m) < ORBIT_RADIUS + 100 &&
-        (Math.hypot(m.x - this.moon.x, m.y - this.moon.y) > ORBIT_RADIUS * 2 || distanceFromEarth(m) < ORBIT_RADIUS),
+        (distance(m, this.moon) > ORBIT_RADIUS * 2 || distanceFromEarth(m) < ORBIT_RADIUS),
     )
       ? 1
       : 0;
@@ -251,9 +225,7 @@ class MoonsWork implements MiniGame {
   // ------------------------------------------------------------ rendering
 
   render(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = 'rgb(0,34,82)';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    drawTiledBackground(ctx);
+    drawStarryBackground(ctx);
 
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1;
@@ -284,7 +256,7 @@ class MoonsWork implements MiniGame {
   }
 
   /** The meteorite image has a long tail behind the rock. */
-  private drawMeteorite(ctx: CanvasRenderingContext2D, m: Mover): void {
+  private drawMeteorite(ctx: CanvasRenderingContext2D, m: Heading): void {
     const r = METEORITE_RADIUS;
     ctx.save();
     ctx.translate(m.x, m.y);
@@ -293,17 +265,21 @@ class MoonsWork implements MiniGame {
     ctx.restore();
   }
 
+  /** Font size for the score, measured again only when the score changes. */
+  private scoreFont = { score: -1, size: EARTH_RADIUS };
+
   /** The score is drawn on the earth, about half as wide as it. */
   private drawScore(ctx: CanvasRenderingContext2D): void {
     const text = String(this.score);
-    ctx.font = 'bold 100px sans-serif';
-    const widthAt100 = ctx.measureText(text).width;
-    const size = Math.min(EARTH_RADIUS, Math.trunc((100 * EARTH_RADIUS) / widthAt100));
+    if (this.scoreFont.score !== this.score) {
+      ctx.font = 'bold 100px sans-serif';
+      const size = Math.min(EARTH_RADIUS, Math.trunc((100 * EARTH_RADIUS) / ctx.measureText(text).width));
+      this.scoreFont = { score: this.score, size };
+    }
+    const { size } = this.scoreFont;
     ctx.font = `bold ${size}px sans-serif`;
     ctx.fillStyle = '#fff';
-    ctx.textAlign = 'center';
-    ctx.fillText(text, CENTER.x, CENTER.y + size / 2);
-    ctx.textAlign = 'left';
+    fillTextCentered(ctx, text, CENTER.x, CENTER.y + size / 2);
   }
 
   private drawLives(ctx: CanvasRenderingContext2D): void {
@@ -316,34 +292,53 @@ class MoonsWork implements MiniGame {
   }
 }
 
-function move(m: Mover, dt: number): void {
-  m.x += Math.cos(toRadians(m.angle)) * m.speed * (dt / 1000);
-  m.y += Math.sin(toRadians(m.angle)) * m.speed * (dt / 1000);
+/** The red glow fades in from each edge towards the inner 60 % of the screen. */
+const INSET_X = (WIDTH * 0.4) / 2;
+const INSET_Y = (HEIGHT * 0.4) / 2;
+const ALERT_EDGES: readonly { gradient: Line; rect: Rect }[] = [
+  { gradient: { x0: 0, y0: 0, x1: 0, y1: INSET_Y }, rect: { x: 0, y: 0, w: WIDTH, h: INSET_Y } },
+  { gradient: { x0: 0, y0: 0, x1: INSET_X, y1: 0 }, rect: { x: 0, y: 0, w: INSET_X, h: HEIGHT } },
+  {
+    gradient: { x0: 0, y0: HEIGHT, x1: 0, y1: HEIGHT - INSET_Y },
+    rect: { x: 0, y: HEIGHT - INSET_Y, w: WIDTH, h: INSET_Y },
+  },
+  {
+    gradient: { x0: WIDTH, y0: 0, x1: WIDTH - INSET_X, y1: 0 },
+    rect: { x: WIDTH - INSET_X, y: 0, w: INSET_X, h: HEIGHT },
+  },
+];
+
+interface Line {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
 }
+
+/** Gradients belong to a context, so they are made once for the game canvas. */
+let alertFills: { ctx: CanvasRenderingContext2D; edges: { fill: CanvasGradient; rect: Rect }[] } | null = null;
 
 /** Red glow from the screen edges that pulses faster as the danger grows. */
 function drawAlert(ctx: CanvasRenderingContext2D, level: number, now: number): void {
   if (level === 0) return;
-  const alpha = ((Math.sin(4 * (now / 1000) * level) + 1) * 40) / 255;
-  const inner = { x: (WIDTH * 0.4) / 2, y: (HEIGHT * 0.4) / 2 };
-  const edge = (x0: number, y0: number, x1: number, y1: number) => {
-    const g = ctx.createLinearGradient(x0, y0, x1, y1);
-    g.addColorStop(0, `rgba(255,0,0,${alpha})`);
-    g.addColorStop(1, 'rgba(255,0,0,0)');
-    return g;
-  };
-  ctx.fillStyle = edge(0, 0, 0, inner.y);
-  ctx.fillRect(0, 0, WIDTH, inner.y);
-  ctx.fillStyle = edge(0, 0, inner.x, 0);
-  ctx.fillRect(0, 0, inner.x, HEIGHT);
-  ctx.fillStyle = edge(0, HEIGHT, 0, HEIGHT - inner.y);
-  ctx.fillRect(0, HEIGHT - inner.y, WIDTH, inner.y);
-  ctx.fillStyle = edge(WIDTH, 0, WIDTH - inner.x, 0);
-  ctx.fillRect(WIDTH - inner.x, 0, inner.x, HEIGHT);
+  if (alertFills?.ctx !== ctx) {
+    const edges = ALERT_EDGES.map(({ gradient: { x0, y0, x1, y1 }, rect }) => {
+      const fill = ctx.createLinearGradient(x0, y0, x1, y1);
+      fill.addColorStop(0, '#f00');
+      fill.addColorStop(1, 'rgba(255,0,0,0)');
+      return { fill, rect };
+    });
+    alertFills = { ctx, edges };
+  }
+  ctx.globalAlpha = ((Math.sin(4 * (now / 1000) * level) + 1) * 40) / 255;
+  for (const { fill, rect } of alertFills.edges) {
+    ctx.fillStyle = fill;
+    ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  }
+  ctx.globalAlpha = 1;
 }
 
 export const moonsWork: MiniGameEntry = {
-  id: 'moons-work',
   depth: 0,
   title: "Moon's Work",
   creator: 'Attacked by つまムーン',

@@ -15,12 +15,14 @@ function isTextField(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement && target.type !== 'range';
 }
 
-/** Routes browser events to the top scene. */
+/** Routes browser events to the top scene, and opens its pause menu on Escape. */
 export function bindInput(stage: Stage, scenes: SceneStack): void {
   window.addEventListener('keydown', (e) => {
     if (BLOCKED_KEYS.has(e.code) && !isTextField(e.target)) e.preventDefault();
     input.keys.add(e.code);
-    scenes.top()?.keyDown?.(e);
+    const top = scenes.top();
+    if (e.code === 'Escape' && !e.repeat && top?.pauseMenu) scenes.push(top.pauseMenu());
+    else top?.keyDown?.(e);
   });
   window.addEventListener('keyup', (e) => {
     input.keys.delete(e.code);
@@ -32,7 +34,7 @@ export function bindInput(stage: Stage, scenes: SceneStack): void {
   });
 
   const canvas = stage.canvas;
-  const toPointer = (e: PointerEvent | MouseEvent) => ({ ...stage.toLogical(e.clientX, e.clientY), button: e.button });
+  const toPointer = (e: MouseEvent) => stage.toLogical(e.clientX, e.clientY);
 
   canvas.addEventListener('pointerdown', (e) => {
     canvas.setPointerCapture(e.pointerId);
@@ -51,7 +53,7 @@ export function bindInput(stage: Stage, scenes: SceneStack): void {
     input.pointerDown = false;
   });
   window.addEventListener('pointermove', (e) => {
-    const p = stage.toLogical(e.clientX, e.clientY);
+    const p = toPointer(e);
     input.pointer = p;
     if (e.target === canvas || canvas.hasPointerCapture(e.pointerId)) scenes.top()?.pointerMove?.(p);
   });

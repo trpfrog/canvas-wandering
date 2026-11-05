@@ -1,9 +1,13 @@
 import { img, type ImageKey } from '../../engine/assets';
 import { audio } from '../../engine/audio';
-import { drawRotated } from '../../engine/draw';
+import { drawRotated, drawTiled } from '../../engine/draw';
 import {
+  advance,
   angleDiffDegrees,
+  clamp,
+  distance,
   intersects,
+  mod,
   normalizeDegrees,
   place,
   polygon,
@@ -12,13 +16,14 @@ import {
   type Shape,
 } from '../../engine/geometry';
 import { input } from '../../engine/input';
+import { randomInt } from '../../engine/random';
 import type { Scene } from '../../engine/scene';
 import { HEIGHT, WIDTH } from '../../engine/stage';
-import { scenes } from '../context';
+import { SceneTag } from '../context';
 import { MEDALS, player } from '../medals';
 import { ROCKET_OUTLINE } from '../rocket-outline';
 import { MINI_GAMES } from '../mini-games/registry';
-import { startMiniGame } from '../mini-games/mini-game';
+import { startMiniGame, type MiniGameEntry } from '../mini-games/mini-game';
 import { createPauseDialog, pushMedalWindow } from '../ui/dialogs';
 import { drawIndicator, drawMiniMap, drawSpeedometer } from './hud';
 import { eventStarHitBox, MAP_DEPTH, MAP_SIZE, MINI_GAME_STAR_RADIUS, SpaceMap, type EventStar } from './space-map';
@@ -31,6 +36,7 @@ const TURN_DEGREES = 3.6;
 const INVINCIBLE_MS = 5000;
 
 const ROCKET_HIT_BOX = polygon(ROCKET_OUTLINE);
+const SCREEN_CENTER = { x: WIDTH / 2, y: HEIGHT / 2 };
 
 interface Twinkle {
   x: number;
@@ -41,7 +47,7 @@ const TWINKLE_MS = 400;
 
 /** The open world: fly the rocket around and visit the mini game stars. */
 export class SpaceScene implements Scene {
-  readonly tag = 'space';
+  readonly tag = SceneTag.space;
   readonly opaque = true;
   readonly bgm = 'space';
 
@@ -62,6 +68,8 @@ export class SpaceScene implements Scene {
   private wheelDelta: number | null = null;
   private twinkles: Twinkle[] = [];
   private fadingBackgrounds: { image: ImageKey; alpha: number }[] = [];
+  /** The mini game stars move to new places after each mini game. */
+  private visitedMiniGame = false;
 
   private get layer() {
     return this.map.layer(this.rocket.depth);
@@ -69,11 +77,14 @@ export class SpaceScene implements Scene {
 
   // ------------------------------------------------------------------ lifecycle
 
-  resume(popped: Scene | null): void {
-    if (popped?.tag !== 'pause') this.map.redistributeMiniGameStars();
+  resume(): void {
+    if (this.visitedMiniGame) {
+      this.visitedMiniGame = false;
+      this.map.redistributeMiniGameStars();
+    }
     this.invincibleUntil = this.now + INVINCIBLE_MS;
     this.rocket.speed = 0;
-    audio.playSe('rocket', { loop: true, exclusive: true });
+    audio.playSe('rocket', { loop: true });
   }
 
   suspend(): void {
@@ -82,12 +93,12 @@ export class SpaceScene implements Scene {
     this.wheelDelta = null;
   }
 
+  pauseMenu(): Scene {
+    return createPauseDialog();
+  }
+
   keyDown(e: KeyboardEvent): void {
-    if (e.code === 'Escape' && !e.repeat) {
-      scenes().push(createPauseDialog(false));
-    } else if (e.code === 'KeyZ' || e.code === 'KeyX') {
-      this.pendingDepthKeys.add(e.code);
-    }
+    if (e.code === 'KeyZ' || e.code === 'KeyX') this.pendingDepthKeys.add(e.code);
   }
 
   wheel(deltaY: number): void {
@@ -104,16 +115,17 @@ export class SpaceScene implements Scene {
 
     if (this.ticks % 2 === 0) this.controllerStep();
 
-    r.x += Math.cos(toRadians(r.angle)) * r.speed * (dt / 1000);
-    r.y += Math.sin(toRadians(r.angle)) * r.speed * (dt / 1000);
+    advance(r, dt);
 
     if (this.ticks % 10 === 0 && !this.isInvincible()) this.checkTouchingStars();
 
     if (input.pointerDown && Math.random() - 0.05 <= r.speed / MAX_SPEED) this.addTwinkle();
-    this.twinkles = this.twinkles.filter((t) => this.now - t.bornAt <= TWINKLE_MS);
+    if (this.twinkles.length > 0) this.twinkles = this.twinkles.filter((t) => this.now - t.bornAt <= TWINKLE_MS);
 
-    for (const bg of this.fadingBackgrounds) bg.alpha -= 1 / 64;
-    this.fadingBackgrounds = this.fadingBackgrounds.filter((bg) => bg.alpha >= 0);
+    if (this.fadingBackgrounds.length > 0) {
+      for (const bg of this.fadingBackgrounds) bg.alpha -= 1 / 64;
+      this.fadingBackgrounds = this.fadingBackgrounds.filter((bg) => bg.alpha >= 0);
+    }
   }
 
   private controllerStep(): void {
@@ -127,8 +139,7 @@ export class SpaceScene implements Scene {
     if (w || s) {
       this.accelerate(ACCELERATION * (Number(w) - Number(s)));
     } else if (mouse) {
-      const distance = Math.hypot(mouse.x - WIDTH / 2, mouse.y - HEIGHT / 2);
-      this.accelerate(ACCELERATION * (distance / (HEIGHT / 2) - 0.5) * 2);
+      this.accelerate(ACCELERATION * (distance(mouse, SCREEN_CENTER) / (HEIGHT / 2) - 0.5) * 2);
     }
 
     // A: turn left, D: turn right, mouse: turn towards the pointer
@@ -159,12 +170,12 @@ export class SpaceScene implements Scene {
   }
 
   private accelerate(a: number): void {
-    this.rocket.speed = Math.min(MAX_SPEED, Math.max(0, this.rocket.speed + a));
+    this.rocket.speed = clamp(this.rocket.speed + a, 0, MAX_SPEED);
   }
 
   private changeDepth(delta: number): void {
     const previous = this.layer.background;
-    this.rocket.depth = (((this.rocket.depth + delta) % MAP_DEPTH) + MAP_DEPTH) % MAP_DEPTH;
+    this.rocket.depth = mod(this.rocket.depth + delta, MAP_DEPTH);
     if (this.layer.background !== previous) this.fadingBackgrounds.push({ image: previous, alpha: 1 });
   }
 
@@ -187,10 +198,10 @@ export class SpaceScene implements Scene {
 
     const miniGameStar = touching
       .filter((star) => star.kind === 'mini-game')
-      .toSorted((p, q) => Math.hypot(p.x - r.x, p.y - r.y) - Math.hypot(q.x - r.x, q.y - r.y))
+      .toSorted((p, q) => distance(p, r) - distance(q, r))
       .at(0);
     if (miniGameStar) {
-      startMiniGame(miniGameStar.entry);
+      this.enter(miniGameStar.entry);
       return;
     }
 
@@ -201,12 +212,17 @@ export class SpaceScene implements Scene {
     }
   }
 
+  private enter(miniGame: MiniGameEntry): void {
+    this.visitedMiniGame = true;
+    startMiniGame(miniGame);
+  }
+
   private addTwinkle(): void {
     const range = 10;
     const p = input.pointer;
     this.twinkles.push({
-      x: p.x - WIDTH / 2 + Math.trunc(this.rocket.x) + Math.trunc(2 * range * Math.random()) - range,
-      y: p.y - HEIGHT / 2 + Math.trunc(this.rocket.y) + Math.trunc(2 * range * Math.random()) - range,
+      x: p.x - WIDTH / 2 + Math.trunc(this.rocket.x) + randomInt(2 * range) - range,
+      y: p.y - HEIGHT / 2 + Math.trunc(this.rocket.y) + randomInt(2 * range) - range,
       bornAt: this.now,
     });
   }
@@ -239,13 +255,10 @@ export class SpaceScene implements Scene {
   /** Tiles the background with half-speed parallax. */
   private drawBackground(ctx: CanvasRenderingContext2D, image: ImageKey, alpha: number): void {
     const size = 1024;
-    const mod = (v: number) => ((v % size) + size) % size;
-    const x0 = mod(-Math.trunc(this.rocket.x / 2 - WIDTH / 2)) - size;
-    const y0 = mod(-Math.trunc(this.rocket.y / 2 - HEIGHT / 2)) - size;
+    const x0 = mod(-Math.trunc(this.rocket.x / 2 - WIDTH / 2), size) - size;
+    const y0 = mod(-Math.trunc(this.rocket.y / 2 - HEIGHT / 2), size) - size;
     ctx.globalAlpha = alpha;
-    for (let x = x0; x < WIDTH; x += size) {
-      for (let y = y0; y < HEIGHT; y += size) ctx.drawImage(img(image), x, y, size, size);
-    }
+    drawTiled(ctx, img(image), size, { width: WIDTH, height: HEIGHT }, x0, y0);
     ctx.globalAlpha = 1;
   }
 
@@ -295,7 +308,7 @@ export class SpaceScene implements Scene {
       // Cross-fade into the normal look; the curve gets steeper towards the end.
       const ratio = (this.invincibleUntil - this.now) / INVINCIBLE_MS;
       const alpha = (1 - Math.pow(100, -ratio)) / (1 - 1 / 100);
-      ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+      ctx.globalAlpha = clamp(alpha, 0, 1);
       draw(stopped ? 'space/rocket-invincible-stop' : 'space/rocket-invincible');
       ctx.globalAlpha = 1;
     }
@@ -320,5 +333,5 @@ export class SpaceScene implements Scene {
   }
 }
 
-const whitish = (): number => 200 + Math.trunc(55 * Math.random());
+const whitish = (): number => 200 + randomInt(55);
 const randomWhitishColor = (): string => `rgb(${whitish()},${whitish()},${whitish()})`;

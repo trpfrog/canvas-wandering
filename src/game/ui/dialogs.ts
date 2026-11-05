@@ -1,45 +1,39 @@
-import { imageUrl, type ImageKey } from '../../engine/assets';
+import type { ImageKey } from '../../engine/assets';
 import { audio } from '../../engine/audio';
-import type { Scene } from '../../engine/scene';
-import { scenes } from '../context';
+import { pad2 } from '../../engine/draw';
+import { hasTag, SceneTag, scenes } from '../context';
 import { player, type MedalDef } from '../medals';
 import { DialogScene } from './dialog';
-import { button, h } from './dom';
-
-const isTag = (tag: Scene['tag']) => (scene: Scene) => scene.tag === tag;
+import { button, h, image } from './dom';
 
 export function backToMainMenu(): void {
-  scenes().popUntil(isTag('main-menu'));
+  scenes().popUntil(hasTag(SceneTag.mainMenu));
 }
 
 export function backToSpace(): void {
-  scenes().popUntil(isTag('space'));
+  scenes().popUntil(hasTag(SceneTag.space));
 }
 
-const pop = () => scenes().pop();
+const close = (): void => {
+  scenes().pop();
+};
 
-export function createPauseDialog(hasBackToSpaceButton: boolean): DialogScene {
+/** The pause menu for the scene currently on top. */
+export function createPauseDialog(): DialogScene {
+  const pausingSpace = scenes().top()?.tag === SceneTag.space;
   return new DialogScene(
     [
-      h('div', { class: 'title-font pause-title', text: 'Pause' }),
+      h('div', { class: 'title-font dialog-title', text: 'Pause' }),
       h(
         'div',
         { class: 'button-list' },
-        button('Resume', pop),
+        button('Resume', close),
         button('Settings', () => scenes().push(createSettingsDialog())),
         button('Back to Main Menu', backToMainMenu),
-        hasBackToSpaceButton && button('Back to Space', backToSpace),
+        !pausingSpace && button('Back to Space', backToSpace),
       ),
     ],
-    {
-      tag: 'pause',
-      width: 300,
-      height: 200,
-      panelClass: 'pause-panel',
-      rich: true,
-      clickToClose: true,
-      escToClose: true,
-    },
+    { kind: 'menu', width: 300, height: 200, panelClass: 'pause-panel' },
   );
 }
 
@@ -54,7 +48,7 @@ export function createSettingsDialog(): DialogScene {
   const volume = audio.getVolume();
   return new DialogScene(
     [
-      h('div', { class: 'title-font settings-title', text: 'Settings' }),
+      h('div', { class: 'title-font dialog-title settings-title', text: 'Settings' }),
       h(
         'fieldset',
         { class: 'volume-settings' },
@@ -63,11 +57,9 @@ export function createSettingsDialog(): DialogScene {
         volumeSlider('SE', volume.se, (se) => audio.setVolume({ se })),
       ),
     ],
-    { width: 500, height: 400, panelClass: 'light-panel', rich: true, clickToClose: true, escToClose: true },
+    { kind: 'menu', width: 500, height: 400, panelClass: 'light-panel' },
   );
 }
-
-const pad2 = (n: number): string => String(n).padStart(2, '0');
 
 function formatDate(date: Date): [string, string] {
   return [
@@ -87,24 +79,17 @@ export function createMedalCollectionDialog(): DialogScene {
             h(
               'li',
               {},
-              h('img', { attrs: { src: imageUrl(medal.image), alt: '' } }),
+              image(medal.image),
               h('span', { class: 'medal-title', text: medal.title }),
-              h('span', { class: 'medal-date' }, ...formatDate(acquiredAt).flatMap((s) => [s, h('br')])),
+              h('span', { class: 'medal-date' }, ...withLineBreaks(formatDate(acquiredAt))),
             ),
           ),
         )
       : h('div', { class: 'no-medals', text: 'You have no medals yet.' });
 
   return new DialogScene(
-    [h('div', { class: 'title-font medals-title', text: 'Medal Collections' }), body, button('Close', pop)],
-    {
-      width: 500,
-      height: 400,
-      panelClass: 'light-panel medals-panel',
-      rich: true,
-      clickToClose: true,
-      escToClose: true,
-    },
+    [h('div', { class: 'title-font medals-title', text: 'Medal Collections' }), body, button('Close', close)],
+    { kind: 'menu', width: 500, height: 400, panelClass: 'light-panel medals-panel' },
   );
 }
 
@@ -114,22 +99,17 @@ export function pushMedalWindow(medal: MedalDef): boolean {
   const dialog = new DialogScene(
     [
       h('div', { class: 'medal-get-title', text: 'You got a medal!' }),
-      h(
-        'div',
-        { class: 'medal-get-visual' },
-        h('div', { class: 'medal-rays' }),
-        h('img', { attrs: { src: imageUrl(medal.image), alt: '' } }),
-      ),
+      h('div', { class: 'medal-get-visual' }, h('div', { class: 'medal-rays' }), image(medal.image)),
       h('div', { class: 'medal-get-name', text: medal.title }),
-      button('I got it', pop),
+      button('I got it', close),
     ],
     {
+      kind: 'notice',
       width: 300,
       height: 300,
       panelClass: 'medal-get-panel',
-      clickToClose: true,
       onResume: () => {
-        audio.playSe('achievement', { exclusive: true });
+        audio.playSe('achievement');
         player.register(medal);
       },
     },
@@ -138,8 +118,8 @@ export function pushMedalWindow(medal: MedalDef): boolean {
   return true;
 }
 
-export function createGameOverDialog(title: string, score: number, backgroundColor: string): DialogScene {
-  const dialog = new DialogScene(
+export function createGameOverDialog(title: string, score: number, background: string): DialogScene {
+  return new DialogScene(
     [
       h('div', { class: 'gameover-title', text: title }),
       h('div', { class: 'gameover-score', text: String(score) }),
@@ -150,10 +130,8 @@ export function createGameOverDialog(title: string, score: number, backgroundCol
         button('Back to Space', backToSpace),
       ),
     ],
-    { width: 300, height: 200, panelClass: 'gameover-panel' },
+    { kind: 'blocking', width: 300, height: 200, panelClass: 'gameover-panel', panelBackground: background },
   );
-  dialog.panel.style.background = backgroundColor;
-  return dialog;
 }
 
 export interface MiniGameInfo {
@@ -173,7 +151,7 @@ const withLineBreaks = (list: readonly string[]): (string | HTMLElement)[] =>
 export function createMiniGameStartDialog(info: MiniGameInfo): DialogScene {
   return new DialogScene(
     [
-      h('img', { class: 'start-star', attrs: { src: imageUrl(info.starImage), alt: '' } }),
+      image(info.starImage, 'start-star'),
       h('div', { class: 'start-title', text: info.title }),
       h('div', { class: 'start-creator', text: info.creator }),
       h('div', { class: 'start-description' }, ...withLineBreaks(info.description)),
@@ -183,8 +161,8 @@ export function createMiniGameStartDialog(info: MiniGameInfo): DialogScene {
         { class: `start-rules${info.preformattedRules === true ? ' preformatted' : ''}` },
         ...withLineBreaks(info.howToPlay),
       ),
-      button('Start', pop),
+      button('Start', close),
     ],
-    { width: 600, height: 400, panelClass: 'start-panel', clickToClose: true },
+    { kind: 'notice', width: 600, height: 400, panelClass: 'start-panel' },
   );
 }

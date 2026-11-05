@@ -1,10 +1,10 @@
 import { img } from '../../engine/assets';
+import { randomInt } from '../../engine/random';
 import { HEIGHT, WIDTH } from '../../engine/stage';
 import { scenes } from '../context';
 import { DialogScene } from '../ui/dialog';
 import { button, h } from '../ui/dom';
-import { createGameOverDialog } from '../ui/dialogs';
-import type { MiniGame, MiniGameEntry } from './mini-game';
+import { MiniGameScene, type MiniGameEntry } from './mini-game';
 
 interface Train {
   x: number;
@@ -14,16 +14,16 @@ interface Train {
 }
 
 /** Count the trains that drift across the screen, then answer how many there were. */
-class GalaxyExpress implements MiniGame {
+class GalaxyExpress extends MiniGameScene {
   private readonly trains: Train[];
   private counter = 0;
   private elapsed = 0;
   private asked = false;
 
   constructor() {
-    const count = Math.floor(Math.random() * 10) + 10;
-    this.trains = Array.from({ length: count }, () => {
-      const w = Math.floor(90 * Math.random()) + 30;
+    super({ title: 'Game Over', background: 'blue' });
+    this.trains = Array.from({ length: randomInt(10) + 10 }, () => {
+      const w = randomInt(90) + 30;
       return { x: Math.random() * (WIDTH / 2), y: Math.random() * (HEIGHT / 2), w, h: Math.trunc((w * 2) / 3) };
     });
   }
@@ -40,7 +40,7 @@ class GalaxyExpress implements MiniGame {
     }
     if (this.counter > this.trains.length * 8 && !this.asked) {
       this.asked = true;
-      scenes().push(createAnswerDialog(this.trains.length));
+      scenes().push(createAnswerDialog(this.trains.length, (score) => this.end(score)));
     }
   }
 
@@ -50,7 +50,8 @@ class GalaxyExpress implements MiniGame {
   }
 }
 
-function createAnswerDialog(correctAnswer: number): DialogScene {
+/** Asks for the number of trains; the closer the answer, the higher the score. */
+function createAnswerDialog(correctAnswer: number, onScore: (score: number) => void): DialogScene {
   const field = h('input', { class: 'answer-input', attrs: { type: 'number', inputmode: 'numeric', min: '0' } });
   const submit = () => {
     const answer = Number.parseInt(field.value, 10);
@@ -58,14 +59,13 @@ function createAnswerDialog(correctAnswer: number): DialogScene {
       field.focus();
       return;
     }
-    const score = Math.max(0, 100 - 5 * Math.abs(answer - correctAnswer));
-    scenes().push(createGameOverDialog('Game Over', score, 'blue'));
+    onScore(Math.max(0, 100 - 5 * Math.abs(answer - correctAnswer)));
   };
   field.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submit();
   });
 
-  const dialog = new DialogScene(
+  return new DialogScene(
     [
       h(
         'div',
@@ -75,13 +75,11 @@ function createAnswerDialog(correctAnswer: number): DialogScene {
       ),
       h('div', { class: 'answer-form' }, field, button('OK', submit)),
     ],
-    { width: WIDTH - 70, height: HEIGHT - 80, panelClass: 'answer-panel' },
+    { kind: 'blocking', width: WIDTH - 70, height: HEIGHT - 80, panelClass: 'answer-panel' },
   );
-  return dialog;
 }
 
 export const galaxyExpress: MiniGameEntry = {
-  id: 'galaxy-express',
   depth: 0,
   title: 'Galaxy Express',
   creator: 'わくわくぎんがだん',

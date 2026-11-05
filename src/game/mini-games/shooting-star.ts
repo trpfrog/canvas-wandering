@@ -1,16 +1,13 @@
 import { img } from '../../engine/assets';
-import { arcDegrees } from '../../engine/draw';
+import { arcDegrees, fillTextCentered } from '../../engine/draw';
 import { normalizeDegrees } from '../../engine/geometry';
 import { HEIGHT, WIDTH } from '../../engine/stage';
-import { scenes } from '../context';
 import { MEDALS } from '../medals';
-import { createGameOverDialog, pushMedalWindow } from '../ui/dialogs';
-import { drawTiledBackground } from './moons-work';
-import type { MiniGame, MiniGameEntry } from './mini-game';
+import { MiniGameScene, type MiniGameEntry } from './mini-game';
+import { drawStarryBackground } from './starry-background';
 
 const GAME_MS = 30_000;
 const PENALTY = 10;
-const MEDAL_SCORE = 100;
 
 /** Shooting stars fly along huge circles centered far below the screen. */
 const ORBIT_CX = WIDTH / 2;
@@ -37,12 +34,19 @@ interface Star {
 const COUPLE_HEIGHT = 300;
 
 /** Send as many shooting stars as possible while the couple is not looking at the sky. */
-class ShootingStar implements MiniGame {
+class ShootingStar extends MiniGameScene {
   private stars: Star[] = [];
   private score = 0;
   private now = 0;
   private startedAt: number | null = null;
-  private ended = false;
+
+  constructor() {
+    super({
+      title: 'Game Over',
+      background: 'rgba(200,200,0,0.2)',
+      medal: { def: MEDALS.shootingStar, minScore: 100 },
+    });
+  }
 
   private lookingUntil = 0;
   private desireToSeeSky = 0;
@@ -53,7 +57,7 @@ class ShootingStar implements MiniGame {
   }
 
   private launch(): void {
-    if (this.ended) return;
+    if (this.isOver) return;
     this.startedAt ??= this.now;
     this.score++;
     this.stars.push({
@@ -90,10 +94,11 @@ class ShootingStar implements MiniGame {
     }
   }
 
-  private coupleSize(): { x: number; y: number; w: number } {
+  /** The couple in the lower right corner, hugging or looking up at the sky. */
+  private couple(): { image: HTMLImageElement; x: number; y: number; w: number } {
     const image = img(this.looksAtSky() ? 'shooting-star/looking' : 'shooting-star/hug');
     const w = Math.trunc((COUPLE_HEIGHT * image.width) / image.height);
-    return { x: WIDTH - w - 30, y: HEIGHT - COUPLE_HEIGHT, w };
+    return { image, x: WIDTH - w - 30, y: HEIGHT - COUPLE_HEIGHT, w };
   }
 
   update(dt: number): void {
@@ -111,7 +116,7 @@ class ShootingStar implements MiniGame {
           y: (HEIGHT - margin * 2) * Math.random() + margin / 2,
           alpha: 0.8,
         };
-        const couple = this.coupleSize();
+        const couple = this.couple();
         star.heart = { x: couple.x + Math.random() * 300, y: couple.y + Math.random() * 250, alpha: 1 };
       }
       for (const effect of [star.heart, star.penalty]) {
@@ -122,29 +127,19 @@ class ShootingStar implements MiniGame {
     }
     this.stars = this.stars.filter((s) => !isGone(s.angle) || (s.penalty !== null && s.penalty.alpha >= 0));
 
-    if (this.startedAt !== null && this.remainingMs() === 0 && !this.ended) this.endGame();
-  }
-
-  private endGame(): void {
-    this.ended = true;
-    scenes().push(createGameOverDialog('Game Over', this.score, 'rgba(200,200,0,0.2)'));
-    if (this.score >= MEDAL_SCORE) pushMedalWindow(MEDALS.shootingStar);
+    if (this.remainingMs() === 0) this.end(this.score);
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = '#111111';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    drawTiledBackground(ctx);
+    drawStarryBackground(ctx);
 
     // Big translucent score in the middle
     const scoreSize = Math.trunc(HEIGHT * 0.6);
     ctx.globalAlpha = 0.1;
     ctx.fillStyle = '#fff';
     ctx.font = `bold ${scoreSize}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(String(this.score), WIDTH / 2, (HEIGHT + scoreSize / 2) / 2);
+    fillTextCentered(ctx, String(this.score), WIDTH / 2, (HEIGHT + scoreSize / 2) / 2);
     ctx.globalAlpha = 1;
-    ctx.textAlign = 'left';
 
     for (const star of this.stars) this.drawStar(ctx, star);
     this.drawCouple(ctx);
@@ -180,15 +175,13 @@ class ShootingStar implements MiniGame {
   }
 
   private drawCouple(ctx: CanvasRenderingContext2D): void {
-    const { x, y, w } = this.coupleSize();
+    const { image, x, y, w } = this.couple();
     const shake = Math.max(0, this.desireToSeeSky - 3) * Math.random();
-    const image = img(this.looksAtSky() ? 'shooting-star/looking' : 'shooting-star/hug');
     ctx.drawImage(image, x - Math.trunc(shake), y, w, COUPLE_HEIGHT);
   }
 }
 
 export const shootingStar: MiniGameEntry = {
-  id: 'shooting-star',
   depth: 0,
   title: "Don't Show Shooting Stars!",
   creator: 'つまみ流星群 impacted by ねぎー彗星',

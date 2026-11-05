@@ -2,13 +2,10 @@
  * 星屑集め — ported from the unmerged upstream PR trpfrog/medipro-game#271.
  */
 import { img } from '../../engine/assets';
-import { fillCircle } from '../../engine/draw';
+import { pad2 } from '../../engine/draw';
 import { circle, intersects, place, rect } from '../../engine/geometry';
-import type { Point } from '../../engine/stage';
-import { HEIGHT, WIDTH } from '../../engine/stage';
-import { scenes } from '../context';
-import { createGameOverDialog } from '../ui/dialogs';
-import type { MiniGame, MiniGameEntry } from './mini-game';
+import { HEIGHT, WIDTH, type Point } from '../../engine/stage';
+import { MiniGameScene, type MiniGameEntry } from './mini-game';
 
 /** Everything in this game is counted in 10 ms ticks. */
 const COUNTDOWN_TICKS = 300;
@@ -19,6 +16,8 @@ const END_TICK = 1400;
 const KOZOU = { w: 112, h: 267, speed: 5 };
 const CUP = { w: 100, h: 130 };
 const CUP_Y = HEIGHT - 200;
+/** Only the top 50 px of the cup catch dust. */
+const CUP_HIT_BOX = rect(CUP.w, 50, 0, 25);
 const DUST_SIZE = 20;
 
 interface Dust {
@@ -29,14 +28,17 @@ interface Dust {
 }
 
 /** Catch the stardust the boy scatters with the cup. Ten seconds. It IS stardust. */
-class Stardust implements MiniGame {
+class Stardust extends MiniGameScene {
   private ticks = 0;
   private score = 0;
   private cupX = WIDTH / 2;
   private dust: Dust[] = [];
   /** x of the boy's back; he faces right while `facing` is 1. */
   private kozou = { x: KOZOU.w, vx: KOZOU.speed, facing: 1 as 1 | -1 };
-  private ended = false;
+
+  constructor() {
+    super({ title: 'GAME OVER', background: 'rgba(118,34,0,0.71)' });
+  }
 
   pointerMove(p: Point): void {
     this.cupX = p.x;
@@ -48,10 +50,7 @@ class Stardust implements MiniGame {
     this.catchDust();
     if (this.ticks >= COUNTDOWN_TICKS && this.ticks < SPAWN_END_TICK && this.ticks % 5 === 0) this.scatter();
     this.ticks++;
-    if (this.ticks > END_TICK && !this.ended) {
-      this.ended = true;
-      scenes().push(createGameOverDialog('GAME OVER', this.score, 'rgba(118,34,0,0.71)'));
-    }
+    if (this.ticks > END_TICK) this.end(this.score);
   }
 
   private moveKozou(): void {
@@ -94,12 +93,15 @@ class Stardust implements MiniGame {
     }
   }
 
+  /** Counts the dust that falls into the cup and drops what can no longer be caught. */
   private catchDust(): void {
-    const cup = place(rect(CUP.w, 50, 0, 25), this.cupX, CUP_Y);
+    const cup = place(CUP_HIT_BOX, this.cupX, CUP_Y);
     const caught = (d: Dust) => intersects(cup, place(circle(DUST_SIZE / 2), d.x + DUST_SIZE / 2, d.y + DUST_SIZE / 2));
+    const missed = (d: Dust) => d.vy > 0 && d.y > CUP_Y + 50;
     const before = this.dust.length;
     this.dust = this.dust.filter((d) => !caught(d));
     this.score += before - this.dust.length;
+    this.dust = this.dust.filter((d) => !missed(d));
   }
 
   private remainingTicks(): number {
@@ -119,7 +121,12 @@ class Stardust implements MiniGame {
     ctx.restore();
 
     ctx.fillStyle = '#ff0';
-    for (const d of this.dust) fillCircle(ctx, d.x + DUST_SIZE / 2, d.y + DUST_SIZE / 2, DUST_SIZE / 2);
+    ctx.beginPath();
+    for (const d of this.dust) {
+      ctx.moveTo(d.x + DUST_SIZE, d.y + DUST_SIZE / 2);
+      ctx.arc(d.x + DUST_SIZE / 2, d.y + DUST_SIZE / 2, DUST_SIZE / 2, 0, Math.PI * 2);
+    }
+    ctx.fill();
 
     ctx.drawImage(img('stardust/cup'), this.cupX - CUP.w / 2, CUP_Y, CUP.w, CUP.h);
 
@@ -128,7 +135,7 @@ class Stardust implements MiniGame {
     ctx.textBaseline = 'alphabetic';
     const remaining = this.remainingTicks();
     ctx.fillText(`score  ${this.score}`, WIDTH - 150, 20);
-    ctx.fillText(`time  ${Math.trunc(remaining / 100)}.${String(remaining % 100).padStart(2, '0')}`, 0, 20);
+    ctx.fillText(`time  ${Math.trunc(remaining / 100)}.${pad2(remaining % 100)}`, 0, 20);
 
     ctx.font = '60px sans-serif';
     if (this.ticks < COUNTDOWN_TICKS) {
@@ -140,7 +147,6 @@ class Stardust implements MiniGame {
 }
 
 export const stardust: MiniGameEntry = {
-  id: 'stardust',
   depth: 0,
   title: '星屑集め',
   creator: 'Q',

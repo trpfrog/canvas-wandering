@@ -17,8 +17,14 @@ export class Stage {
   readonly ctx: CanvasRenderingContext2D;
   readonly overlay: HTMLElement;
   private pixelRatio = 1;
+  /** Where the screen is in the viewport, kept up to date on resize. */
+  private viewport = { left: 0, top: 0, scale: 1 };
 
-  constructor(container: HTMLElement) {
+  /** @param onResize called after the canvas was resized (which clears it) */
+  constructor(
+    container: HTMLElement,
+    private readonly onResize: () => void = () => {},
+  ) {
     this.root = document.createElement('div');
     this.root.className = 'stage';
 
@@ -35,40 +41,48 @@ export class Stage {
     container.append(this.root);
 
     this.resize();
-    window.addEventListener('resize', () => this.resize());
+    window.addEventListener('resize', () => {
+      this.resize();
+      this.onResize();
+    });
   }
 
   private resize(): void {
     const scale = Math.min(window.innerWidth / WIDTH, window.innerHeight / HEIGHT);
     this.root.style.transform = `translate(-50%, -50%) scale(${scale})`;
-    this.pixelRatio = scale * (window.devicePixelRatio || 1);
+    this.viewport = {
+      left: (window.innerWidth - WIDTH * scale) / 2,
+      top: (window.innerHeight - HEIGHT * scale) / 2,
+      scale,
+    };
+    // More than 2 device pixels per logical pixel is not visible but costs fill rate.
+    this.pixelRatio = scale * Math.min(window.devicePixelRatio || 1, 2);
     this.canvas.width = Math.round(WIDTH * this.pixelRatio);
     this.canvas.height = Math.round(HEIGHT * this.pixelRatio);
   }
 
-  /** Shows exactly these DOM layers above the canvas, the last one on top. */
+  /**
+   * Shows exactly these DOM layers above the canvas, the last one on top.
+   * Covered layers are made inert, so they can neither be clicked nor keep focus.
+   */
   showLayers(layers: readonly HTMLElement[]): void {
     const current = [...this.overlay.children];
     const unchanged = current.length === layers.length && current.every((c, i) => c === layers[i]);
     if (!unchanged) this.overlay.replaceChildren(...layers);
+    layers.forEach((layer, i) => {
+      layer.inert = i < layers.length - 1;
+    });
   }
 
   /** Resets the transform so that drawing uses logical coordinates. */
   beginFrame(): CanvasRenderingContext2D {
-    const ctx = this.ctx;
-    ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    return ctx;
+    this.ctx.setTransform(this.pixelRatio, 0, 0, this.pixelRatio, 0, 0);
+    return this.ctx;
   }
 
   /** Converts a client (viewport) position to logical screen coordinates. */
   toLogical(clientX: number, clientY: number): Point {
-    const rect = this.canvas.getBoundingClientRect();
-    return {
-      x: ((clientX - rect.left) / rect.width) * WIDTH,
-      y: ((clientY - rect.top) / rect.height) * HEIGHT,
-    };
+    const { left, top, scale } = this.viewport;
+    return { x: (clientX - left) / scale, y: (clientY - top) / scale };
   }
 }

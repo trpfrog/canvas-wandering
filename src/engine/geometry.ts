@@ -128,11 +128,35 @@ export function circleContainsRect(c: Extract<Shape, { kind: 'circle' }>, r: Rec
 
 export const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
+export const clamp = (value: number, min: number, max: number): number => Math.min(max, Math.max(min, value));
+
+/** Modulo that is never negative. */
+export const mod = (value: number, n: number): number => ((value % n) + n) % n;
+
 export const toRadians = (deg: number): number => (deg * Math.PI) / 180;
 export const toDegrees = (rad: number): number => (rad * 180) / Math.PI;
 
 /** Normalizes an angle in degrees to [0, 360). */
-export const normalizeDegrees = (deg: number): number => ((deg % 360) + 360) % 360;
+export const normalizeDegrees = (deg: number): number => mod(deg, 360);
+
+/** Something moving straight ahead: `angle` in degrees, `speed` in px per second. */
+export interface Heading extends Point {
+  angle: number;
+  speed: number;
+}
+
+/** Moves an object along its heading for `dt` milliseconds. */
+export function advance(m: Heading, dt: number): void {
+  const distancePx = m.speed * (dt / 1000);
+  m.x += Math.cos(toRadians(m.angle)) * distancePx;
+  m.y += Math.sin(toRadians(m.angle)) * distancePx;
+}
+
+/** The point at `radius` from `center` in direction `theta` (radians), truncated to whole pixels. */
+export const onCircle = (center: Point, radius: number, theta: number): Point => ({
+  x: center.x + Math.trunc(radius * Math.cos(theta)),
+  y: center.y + Math.trunc(radius * Math.sin(theta)),
+});
 
 /** Signed smallest difference `to - from` in degrees, in (-180, 180]. */
 export function angleDiffDegrees(from: number, to: number): number {
