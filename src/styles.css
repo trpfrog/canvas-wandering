@@ -1,0 +1,460 @@
+@font-face {
+  font-family: 'DSEG7 Classic';
+  font-weight: bold;
+  font-display: block;
+  src: url('./assets/font/dseg7-classic-bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Bungee Shade';
+  font-display: block;
+  src: url('./assets/font/bungee-shade-regular.ttf') format('truetype');
+}
+
+:root {
+  color-scheme: dark;
+  --ui-font: system-ui, -apple-system, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+  --sky: rgb(143 221 255);
+  --navy: rgb(0 43 108);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: var(--ui-font);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ------------------------------------------------------------------ stage */
+
+.stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1024px;
+  height: 768px;
+  transform-origin: center;
+  overflow: hidden;
+}
+
+.stage-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.stage-overlay > * {
+  position: absolute;
+  inset: 0;
+}
+
+.title-font {
+  font-family: 'Bungee Shade', var(--ui-font);
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+.btn {
+  font: inherit;
+  font-size: 15px;
+  padding: 6px 12px;
+  color: #111;
+  background: linear-gradient(#fdfdfd, #dcdcdc);
+  border: 1px solid #8a8a8a;
+  border-radius: 6px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.btn:hover:not(:disabled) {
+  background: linear-gradient(#ffffff, #e9f3ff);
+  border-color: #4a8fe0;
+}
+
+.btn:active:not(:disabled) {
+  background: linear-gradient(#d6e7fb, #bcd6f5);
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.btn:focus-visible {
+  outline: 2px solid #4a8fe0;
+  outline-offset: 1px;
+}
+
+.button-list {
+  display: grid;
+  gap: 4px;
+}
+
+/* ------------------------------------------------------------------ boot / quit */
+
+.boot-screen,
+.quit-screen {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 32px;
+  background: #000;
+  pointer-events: auto;
+}
+
+.boot-screen .title-font,
+.quit-screen .title-font {
+  font-size: 56px;
+}
+
+.boot-message,
+.quit-hint {
+  font-size: 22px;
+  color: #ccc;
+}
+
+.boot-screen.ready,
+.quit-screen {
+  cursor: pointer;
+}
+
+.boot-screen.ready .boot-message {
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* ------------------------------------------------------------------ main menu */
+
+.main-menu {
+  inset: auto !important;
+  left: 362px !important;
+  top: 384px !important;
+  width: 300px;
+  height: 200px;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+}
+
+.main-menu .btn {
+  font-size: 30px;
+  font-weight: bold;
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------------ transition */
+
+.transition {
+  pointer-events: auto;
+}
+
+.transition-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: #000;
+}
+
+/* ------------------------------------------------------------------ dialogs */
+
+.dialog-backdrop {
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.6);
+  pointer-events: auto;
+}
+
+.dialog-backdrop.rich {
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.dialog-panel {
+  position: relative;
+  padding: 20px;
+  border-radius: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+/* Pause */
+.pause-panel {
+  justify-content: space-between;
+  border: 5px solid var(--sky);
+  background: linear-gradient(rgb(0 15 62), rgb(2 31 106));
+}
+
+.pause-title {
+  font-size: 40px;
+  color: var(--sky);
+  text-align: center;
+}
+
+/* Settings and medal collection */
+.light-panel {
+  color: #111;
+  border: 5px solid var(--navy);
+  background: linear-gradient(rgb(234 255 255), rgb(168 225 255));
+}
+
+.settings-title {
+  font-size: 50px;
+  color: var(--sky);
+  text-align: center;
+}
+
+.volume-settings {
+  border: 1px solid rgb(0 0 0 / 0.3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  display: grid;
+  gap: 16px;
+}
+
+.volume-row {
+  display: grid;
+  gap: 4px;
+}
+
+.volume-row input {
+  width: 100%;
+  accent-color: var(--navy);
+  pointer-events: auto;
+}
+
+.medals-title {
+  font-size: 30px;
+  color: rgb(0 53 80);
+}
+
+.medals-panel {
+  justify-content: space-between;
+}
+
+.medal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.medal-list li {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.medal-list img {
+  width: 40px;
+  height: 40px;
+}
+
+.medal-title {
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.medal-date {
+  font-size: 13px;
+  text-align: right;
+}
+
+.no-medals {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  font-weight: bold;
+  color: gray;
+}
+
+/* "You got a medal!" */
+.medal-get-panel {
+  align-items: center;
+  border-radius: 50px;
+  background: rgb(170 143 0 / 0.53);
+  text-align: center;
+}
+
+.medal-get-title {
+  font-size: 25px;
+  font-weight: bold;
+}
+
+.medal-get-visual {
+  position: relative;
+  width: 200px;
+  height: 160px;
+  display: grid;
+  place-items: center;
+}
+
+.medal-get-visual img {
+  position: relative;
+  width: 160px;
+  height: 160px;
+  object-fit: contain;
+}
+
+.medal-rays {
+  position: absolute;
+  inset: -50px;
+  background: repeating-conic-gradient(#fff 0deg 25.7deg, transparent 25.7deg 51.4deg);
+  mask-image: radial-gradient(circle closest-side, #000, transparent);
+  animation: spin 24s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.medal-get-name {
+  font-size: 18px;
+  font-weight: bold;
+  font-style: italic;
+}
+
+/* Game over */
+.gameover-panel {
+  text-align: center;
+  padding: 10px;
+}
+
+.gameover-title {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.gameover-score {
+  font-size: 100px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+/* Mini game start */
+.start-panel {
+  background: rgb(23 23 23 / 0.9);
+  text-align: center;
+}
+
+.start-star {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 350px;
+  height: 350px;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.start-panel > :not(.start-star) {
+  position: relative;
+}
+
+.start-title {
+  font-size: 25px;
+  font-weight: bold;
+}
+
+.start-creator {
+  font-size: 15px;
+  margin-bottom: 24px;
+}
+
+.start-description {
+  font-size: 18px;
+  font-weight: bold;
+  font-style: italic;
+  margin-bottom: 24px;
+}
+
+.start-rules-title {
+  font-size: 20px;
+  font-weight: bold;
+}
+
+.start-rules {
+  font-size: 15px;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.start-rules.preformatted {
+  font-family: 'MS PGothic', 'Hiragino Kaku Gothic ProN', 'Osaka', sans-serif;
+  font-size: 14px;
+  line-height: 1.15;
+  white-space: pre;
+  text-align: left;
+  margin: 0 auto;
+}
+
+.start-panel > .btn {
+  margin-top: 12px;
+}
+
+/* Galaxy Express answer */
+.answer-panel {
+  padding: 0;
+  border-radius: 0;
+  background: url('./assets/img/galaxy-express/background.webp') top left no-repeat;
+  justify-content: space-between;
+}
+
+.answer-message {
+  padding: 80px 100px;
+  font-size: 24px;
+  font-weight: bold;
+  text-shadow: 0 2px 6px #000;
+}
+
+.answer-message p {
+  margin: 0 0 8px;
+}
+
+.answer-form {
+  display: flex;
+  gap: 8px;
+  padding: 16px;
+}
+
+.answer-input {
+  flex: 1;
+  font: inherit;
+  font-size: 24px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #888;
+  pointer-events: auto;
+}
