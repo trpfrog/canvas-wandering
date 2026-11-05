@@ -1,11 +1,10 @@
 import './styles.css';
-import { audio } from './engine/audio';
+import * as audio from './engine/audio';
 import { bindInput } from './engine/input';
-import { SceneStack, TICK_MS } from './engine/scene';
-import { Stage } from './engine/stage';
-import { BootScene } from './game/boot-scene';
-import { setSceneStack } from './game/context';
-import { QuitScene } from './game/main-menu';
+import { TICK_MS } from './engine/scene';
+import { createStage } from './engine/stage';
+import { createBootScreen } from './game/boot';
+import { scenes } from './game/scenes';
 
 /*
     　　_＿
@@ -29,17 +28,13 @@ import { QuitScene } from './game/main-menu';
 const container = document.querySelector<HTMLElement>('#app');
 if (!container) throw new Error('#app is missing');
 
-const stage = new Stage(container, () => stack.invalidate());
-const stack: SceneStack = new SceneStack({
-  onChange(visible, bgm) {
-    stage.showLayers(visible.flatMap((scene) => scene.element ?? []));
-    audio.playBgm(bgm);
-  },
-  onEmpty: () => stack.push(new QuitScene()),
+const stage = createStage(container, { onResize: scenes.invalidate });
+scenes.onChange((visible, bgm) => {
+  stage.showLayers(visible.flatMap((scene) => scene.element ?? []));
+  audio.playBgm(bgm);
 });
-setSceneStack(stack);
-bindInput(stage, stack);
-stack.push(new BootScene());
+bindInput(stage, scenes);
+scenes.push(createBootScreen());
 
 /** Longest time simulated per frame, so a backgrounded tab does not fast-forward. */
 const MAX_FRAME_MS = 250;
@@ -50,13 +45,13 @@ function frame(now: number): void {
   accumulator += Math.min(now - last, MAX_FRAME_MS);
   last = now;
   while (accumulator >= TICK_MS) {
-    stack.update(TICK_MS);
+    scenes.update(TICK_MS);
     accumulator -= TICK_MS;
   }
-  stack.render(stage.beginFrame());
+  scenes.render(stage.beginFrame());
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
 
 // Expose the scene stack on the dev server for debugging; stripped from production builds.
-if (import.meta.env.DEV) Object.assign(window, { debug: { stack } });
+if (import.meta.env.DEV) Object.assign(window, { debug: { scenes } });

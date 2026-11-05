@@ -1,10 +1,9 @@
 import { FONT_TITLE, FONT_DIGITAL } from '../../engine/assets';
-import { createOffscreen, fillCircle, fillTextCentered, pad2, rgba } from '../../engine/draw';
+import { createOffscreen, fillCircle, fillTextCentered } from '../../engine/draw';
 import { clamp, toRadians } from '../../engine/geometry';
 import { HEIGHT, WIDTH } from '../../engine/stage';
-import { CHUNKS, MAP_SIZE, type Layer } from './space-map';
-
-// ---------------------------------------------------------------- indicator bar
+import { lazy } from '../../engine/timing';
+import { CHUNKS, isOnMap, MAP_SIZE, type Layer } from './space-map';
 
 const FONT_SIZE = 30;
 const MARGIN = 5;
@@ -51,7 +50,7 @@ function drawBack(ctx: CanvasRenderingContext2D, boxes: readonly Box[]): void {
   ctx.fillRect(0, 0, WIDTH, BAR_HEIGHT);
 
   ctx.font = `${FONT_SIZE}px ${FONT_TITLE}`;
-  ctx.fillStyle = rgba(0xcd, 0xcd, 0xcd, 0x75);
+  ctx.fillStyle = '#cdcdcd75';
   fillTextCentered(ctx, 'Space Wandering', WIDTH / 2, (BAR_HEIGHT + FONT_SIZE) / 2 - MARGIN);
 
   const base = ctx.createLinearGradient(0, 0, 0, BAR_HEIGHT);
@@ -96,20 +95,17 @@ function drawFront(ctx: CanvasRenderingContext2D, boxes: readonly Box[]): void {
   }
 }
 
-let indicator: { back: HTMLCanvasElement; front: HTMLCanvasElement; boxes: ReturnType<typeof layoutBoxes> } | null =
-  null;
-
-/** Everything but the values is drawn once (fonts must be loaded by then). */
-function getIndicator(): NonNullable<typeof indicator> {
-  if (indicator) return indicator;
+/** Everything but the values is drawn once, on first use (fonts must be loaded by then). */
+const indicator = lazy(() => {
   const [back, backCtx] = createOffscreen(WIDTH, BAR_HEIGHT);
   const [front, frontCtx] = createOffscreen(WIDTH, BAR_HEIGHT);
   const boxes = layoutBoxes(backCtx);
   drawBack(backCtx, Object.values(boxes));
   drawFront(frontCtx, Object.values(boxes));
-  indicator = { back, front, boxes };
-  return indicator;
-}
+  return { back, front, boxes };
+});
+
+const clockFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 
 /** Keeps only the last `digits` digits, like a mechanical counter. */
 const lastDigits = (value: number, digits: number): string => String(Math.trunc(value)).slice(-digits);
@@ -119,15 +115,14 @@ export function drawIndicator(
   ctx: CanvasRenderingContext2D,
   state: { x: number; y: number; depth: number; medals: number },
 ): void {
-  const { back, front, boxes } = getIndicator();
+  const { back, front, boxes } = indicator();
   ctx.drawImage(back, 0, 0, WIDTH, BAR_HEIGHT);
 
-  const now = new Date();
   const values: [Box, string][] = [
     [boxes.x, lastDigits(state.x, 5)],
     [boxes.y, lastDigits(state.y, 5)],
     [boxes.depth, lastDigits(state.depth, 1)],
-    [boxes.clock, `${pad2(now.getHours())}:${pad2(now.getMinutes())}`],
+    [boxes.clock, clockFormat.format(new Date())],
     [boxes.cleared, String(state.medals)],
   ];
   ctx.font = VALUE_FONT;
@@ -138,8 +133,6 @@ export function drawIndicator(
 
   ctx.drawImage(front, 0, 0, WIDTH, BAR_HEIGHT);
 }
-
-// ---------------------------------------------------------------- mini map
 
 const MINI_CHUNK = 7;
 const MINI_SIZE = CHUNKS * MINI_CHUNK;
@@ -165,7 +158,7 @@ export function drawMiniMap(ctx: CanvasRenderingContext2D, layer: Layer, rocket:
 
   // The rocket's dot shrinks as it gets farther away from the map.
   let r = 5;
-  if (!layer.isWithin(rocket.x, rocket.y)) {
+  if (!isOnMap(rocket)) {
     const fromVertical = Math.min(Math.abs(rocket.x), Math.abs(rocket.x - MAP_SIZE));
     const fromHorizontal = Math.min(Math.abs(rocket.y), Math.abs(rocket.y - MAP_SIZE));
     r = Math.max(r - Math.trunc(Math.max(fromVertical, fromHorizontal) / 500), 2);
@@ -173,23 +166,18 @@ export function drawMiniMap(ctx: CanvasRenderingContext2D, layer: Layer, rocket:
   dot(rocket.x, rocket.y, r, '#f00');
 }
 
-// ---------------------------------------------------------------- speedometer
-
 const SPEED_RADIUS = 150;
 const SPEED_MARGIN = 10;
 /** The speedometer is a quarter circle in the lower left corner. */
 const SPEED_CX = SPEED_MARGIN;
 const SPEED_CY = HEIGHT - SPEED_MARGIN;
 
-let speedBackground: HTMLCanvasElement | null = null;
-
-function getSpeedBackground(): HTMLCanvasElement {
-  if (speedBackground) return speedBackground;
+const speedBackground = lazy(() => {
   const size = SPEED_RADIUS + SPEED_MARGIN;
   const [canvas, ctx] = createOffscreen(size, size);
   ctx.translate(0, size - HEIGHT);
 
-  ctx.fillStyle = rgba(0x11, 0x10, 0x10, 0xcc);
+  ctx.fillStyle = '#111010cc';
   fillCircle(ctx, SPEED_CX, SPEED_CY, SPEED_RADIUS);
 
   const r = SPEED_RADIUS - SPEED_MARGIN;
@@ -209,13 +197,12 @@ function getSpeedBackground(): HTMLCanvasElement {
     ctx.lineTo(x2, y2);
     ctx.stroke();
   }
-  speedBackground = canvas;
   return canvas;
-}
+});
 
 export function drawSpeedometer(ctx: CanvasRenderingContext2D, speed: number, maxSpeed: number): void {
   const size = SPEED_RADIUS + SPEED_MARGIN;
-  ctx.drawImage(getSpeedBackground(), 0, HEIGHT - size, size, size);
+  ctx.drawImage(speedBackground(), 0, HEIGHT - size, size, size);
 
   const rad = toRadians(Math.trunc((speed / maxSpeed) * 90));
   const r = SPEED_RADIUS - SPEED_MARGIN;

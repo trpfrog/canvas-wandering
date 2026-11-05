@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
-import { SceneStack, type Scene } from './scene';
+import { createSceneStack, type Scene } from './scene';
 
 function fakeScene(name: string, opaque: boolean, bgm?: Scene['bgm']): Scene & { log: string[] } {
   const log: string[] = [];
@@ -13,15 +13,16 @@ function fakeScene(name: string, opaque: boolean, bgm?: Scene['bgm']): Scene & {
   };
 }
 
-function createStack() {
+function setup() {
+  const stack = createSceneStack();
   const onChange = vi.fn();
-  const onEmpty = vi.fn();
-  return { stack: new SceneStack({ onChange, onEmpty }), onChange, onEmpty };
+  stack.onChange(onChange);
+  return { stack, onChange };
 }
 
-describe('SceneStack', () => {
+describe('createSceneStack', () => {
   it('suspends the covered scene and resumes it when the top is popped', () => {
-    const { stack } = createStack();
+    const { stack } = setup();
     const a = fakeScene('a', true);
     const b = fakeScene('b', false);
     stack.push(a);
@@ -32,7 +33,7 @@ describe('SceneStack', () => {
   });
 
   it('only resumes the topmost of scenes pushed together', () => {
-    const { stack } = createStack();
+    const { stack } = setup();
     const game = fakeScene('game', true);
     const dialog = fakeScene('dialog', false);
     stack.push(game, dialog);
@@ -41,7 +42,7 @@ describe('SceneStack', () => {
   });
 
   it('shows the topmost opaque scene and everything above it', () => {
-    const { stack } = createStack();
+    const { stack } = setup();
     const a = fakeScene('a', true);
     const b = fakeScene('b', true);
     const c = fakeScene('c', false);
@@ -52,23 +53,34 @@ describe('SceneStack', () => {
   });
 
   it('lets the topmost opaque scene or scene with its own music pick the BGM', () => {
-    const { stack, onChange } = createStack();
+    const { stack, onChange } = setup();
     stack.push(fakeScene('space', true, 'space'));
     stack.push(fakeScene('dialog', false));
     expect(onChange).toHaveBeenLastCalledWith(expect.any(Array), 'space');
     stack.push(fakeScene('game', true, 'mini-game'));
     expect(onChange).toHaveBeenLastCalledWith(expect.any(Array), 'mini-game');
+    stack.push(fakeScene('quiet', true));
+    expect(onChange).toHaveBeenLastCalledWith(expect.any(Array), 'silence');
   });
 
-  it('pops until a predicate holds and reports when it becomes empty', () => {
-    const { stack, onEmpty } = createStack();
-    const menu = { ...fakeScene('menu', true), tag: 'main-menu' as const };
+  it('pops until a predicate holds', () => {
+    const { stack } = setup();
+    const menu = { ...fakeScene('menu', true), tag: 'main-menu' };
     stack.push(menu);
     stack.push(fakeScene('space', true));
     stack.push(fakeScene('pause', false));
     stack.popUntil((s) => s.tag === 'main-menu');
     expect(stack.top()).toBe(menu);
-    stack.pop();
-    expect(onEmpty).toHaveBeenCalledOnce();
+  });
+
+  it('removes a scene only while it is on top', () => {
+    const { stack } = setup();
+    const a = fakeScene('a', true);
+    const b = fakeScene('b', false);
+    stack.push(a, b);
+    stack.remove(a);
+    expect(stack.top()).toBe(b);
+    stack.remove(b);
+    expect(stack.top()).toBe(a);
   });
 });

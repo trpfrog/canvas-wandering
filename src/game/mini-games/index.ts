@@ -7,4 +7,4 @@ import { shootingStar } from './shooting-star';
 import { stardust } from './stardust';
 
 /** Every mini game gets its own star in space. Add a game here to put it on the map. */
-export const MINI_GAMES: readonly MiniGameEntry[] = [moonsWork, raceGame, shootingStar, galaxyExpress, stardust, macho];
+export const miniGames: readonly MiniGameEntry[] = [moonsWork, raceGame, shootingStar, galaxyExpress, stardust, macho];

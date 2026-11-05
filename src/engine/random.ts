@@ -1,4 +1,4 @@
-import type { Point } from './stage';
+import type { Point } from './geometry';
 
 export const randomInt = (maxExclusive: number): number => Math.floor(Math.random() * maxExclusive);
 
@@ -28,8 +28,7 @@ export function poisson(mean: number): number {
 }
 
 /**
- * Picks `count` random points in the rectangle that are at least `interval` apart
- * (a port of the original SparsePointsBuilder).
+ * Picks `count` random points in the rectangle that are at least `interval` apart.
  *
  * The rectangle is divided into a hexagonal lattice with spacing `2 * interval`,
  * `count` lattice points are chosen at random, and each one is then moved by less
@@ -53,7 +52,7 @@ export function sparsePoints(
       lattice.push({ x, y });
     }
   }
-  if (lattice.length < count) throw new Error('Too many points!');
+  if (lattice.length < count) throw new RangeError(`Only ${lattice.length} points fit, ${count} requested`);
 
   return shuffled(lattice)
     .slice(0, count)

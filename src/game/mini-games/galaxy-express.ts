@@ -1,10 +1,12 @@
 import { img } from '../../engine/assets';
 import { randomInt } from '../../engine/random';
+import type { Scene } from '../../engine/scene';
 import { HEIGHT, WIDTH } from '../../engine/stage';
-import { scenes } from '../context';
-import { DialogScene } from '../ui/dialog';
+import { every } from '../../engine/timing';
+import { scenes } from '../scenes';
+import { createDialog } from '../ui/dialog';
 import { button, h } from '../ui/dom';
-import { MiniGameScene, type MiniGameEntry } from './mini-game';
+import type { MiniGame, MiniGameEntry, MiniGameSession } from './mini-game';
 
 interface Train {
   x: number;
@@ -14,58 +16,51 @@ interface Train {
 }
 
 /** Count the trains that drift across the screen, then answer how many there were. */
-class GalaxyExpress extends MiniGameScene {
-  private readonly trains: Train[];
-  private counter = 0;
-  private elapsed = 0;
-  private asked = false;
-
-  constructor() {
-    super({ title: 'Game Over', background: 'blue' });
-    this.trains = Array.from({ length: randomInt(10) + 10 }, () => {
-      const w = randomInt(90) + 30;
-      return { x: Math.random() * (WIDTH / 2), y: Math.random() * (HEIGHT / 2), w, h: Math.trunc((w * 2) / 3) };
-    });
-  }
-
-  update(dt: number): void {
-    this.elapsed += dt;
-    if (this.elapsed < 100) return;
-    this.elapsed -= 100;
-
-    this.counter++;
-    for (const t of this.trains) {
+function start({ end }: MiniGameSession): MiniGame {
+  const trains: Train[] = Array.from({ length: randomInt(10) + 10 }, () => {
+    const w = randomInt(90) + 30;
+    return { x: Math.random() * (WIDTH / 2), y: Math.random() * (HEIGHT / 2), w, h: (w * 2) / 3 };
+  });
+  /** The trains drift for 0.8 s per train; then the player is asked. */
+  let driftSteps = 0;
+  let asked = false;
+  const drift = every(100, () => {
+    driftSteps++;
+    for (const t of trains) {
       t.x += Math.random() * 5;
       t.y += Math.random() * 5;
     }
-    if (this.counter > this.trains.length * 8 && !this.asked) {
-      this.asked = true;
-      scenes().push(createAnswerDialog(this.trains.length, (score) => this.end(score)));
+    if (driftSteps > trains.length * 8 && !asked) {
+      asked = true;
+      scenes.push(createAnswerDialog(trains.length, end));
     }
-  }
+  });
 
-  render(ctx: CanvasRenderingContext2D): void {
-    ctx.drawImage(img('galaxy-express/background'), 0, 0);
-    for (const t of this.trains) ctx.drawImage(img('galaxy-express/train'), Math.trunc(t.x), Math.trunc(t.y), t.w, t.h);
-  }
+  return {
+    update: drift,
+    render(ctx) {
+      ctx.drawImage(img('galaxy-express/background'), 0, 0);
+      for (const t of trains) ctx.drawImage(img('galaxy-express/train'), t.x, t.y, t.w, t.h);
+    },
+  };
 }
 
 /** Asks for the number of trains; the closer the answer, the higher the score. */
-function createAnswerDialog(correctAnswer: number, onScore: (score: number) => void): DialogScene {
+function createAnswerDialog(correctAnswer: number, onScore: (score: number) => void): Scene {
   const field = h('input', { class: 'answer-input', attrs: { type: 'number', inputmode: 'numeric', min: '0' } });
   const submit = () => {
-    const answer = Number.parseInt(field.value, 10);
-    if (Number.isNaN(answer)) {
+    if (Number.isNaN(field.valueAsNumber)) {
       field.focus();
       return;
     }
+    const answer = Math.trunc(field.valueAsNumber);
     onScore(Math.max(0, 100 - 5 * Math.abs(answer - correctAnswer)));
   };
   field.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') submit();
   });
 
-  return new DialogScene(
+  return createDialog(
     [
       h(
         'div',
@@ -91,5 +86,6 @@ export const galaxyExpress: MiniGameEntry = {
     '数を間違えると電車が脱線するかもしれません',
   ],
   starImage: 'galaxy-express/star',
-  create: () => new GalaxyExpress(),
+  result: { title: 'Game Over', background: 'blue' },
+  start,
 };

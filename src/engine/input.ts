@@ -1,5 +1,6 @@
+import type { Point } from './geometry';
 import type { SceneStack } from './scene';
-import type { Point, Stage } from './stage';
+import type { Stage } from './stage';
 
 /** Keys whose default browser action (scrolling) must not happen during the game. */
 const BLOCKED_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);

@@ -1,20 +1,27 @@
 import type { ImageKey } from '../../engine/assets';
 import type { Scene } from '../../engine/scene';
-import { scenes } from '../context';
 import type { MedalDef } from '../medals';
-import { TransitionScene } from '../transition';
-import { createGameOverDialog, createMiniGameStartDialog, createPauseDialog, pushMedalWindow } from '../ui/dialogs';
-import type { MiniGameInfo } from '../ui/dialogs';
+import { backTo, closeTop, scenes } from '../scenes';
+import { transitionTo } from '../transition';
+import { createDialog, withLineBreaks } from '../ui/dialog';
+import { button, h, image } from '../ui/dom';
+import { showMedalDialog } from '../ui/medal-dialogs';
+import { createPauseMenu } from '../ui/menus';
 
-/** A mini game that can be reached from a star in space. */
-export interface MiniGameEntry extends MiniGameInfo {
-  /** The layer of the space map the star is placed on. */
-  readonly depth: number;
-  readonly starImage: ImageKey;
-  create(): Scene;
+/** The parts of a scene a mini game provides; the rest is the same for every mini game. */
+export type MiniGame = Pick<
+  Scene,
+  'update' | 'render' | 'dispose' | 'keyDown' | 'pointerDown' | 'pointerUp' | 'pointerMove' | 'click'
+>;
+
+/** What a running mini game can ask of the game around it. */
+export interface MiniGameSession {
+  /** Ends the game and shows the result. Only the first call counts. */
+  end: (score: number) => void;
+  isOver: () => boolean;
 }
 
-/** How a mini game shows its result. */
+/** How a mini game shows its score. */
 export interface ResultScreen {
   title: string;
   /** Background of the result panel (CSS color). */
@@ -23,33 +30,71 @@ export interface ResultScreen {
   medal?: { def: MedalDef; minScore: number };
 }
 
-/** Base for mini game scenes: full screen, mini game music, pausable, ends once. */
-export abstract class MiniGameScene implements Scene {
-  readonly opaque = true;
-  readonly bgm = 'mini-game';
-  private ended = false;
+/** A mini game that can be reached from a star in space. */
+export interface MiniGameEntry {
+  title: string;
+  creator: string;
+  description: readonly string[];
+  howToPlay: readonly string[];
+  /** Render the rules as preformatted text (for ASCII art). */
+  preformattedRules?: boolean;
+  starImage: ImageKey;
+  /** The layer of the space map the star is placed on. */
+  depth: number;
+  /** Omitted for games without a score. */
+  result?: ResultScreen;
+  start: (session: MiniGameSession) => MiniGame;
+}
 
-  protected constructor(private readonly resultScreen: ResultScreen) {}
-
-  pauseMenu(): Scene {
-    return createPauseDialog();
-  }
-
-  protected get isOver(): boolean {
-    return this.ended;
-  }
-
-  /** Ends the game and shows the score, plus the medal if it was earned. Only the first call counts. */
-  protected end(score: number): void {
-    if (this.ended) return;
-    this.ended = true;
-    const { title, background, medal } = this.resultScreen;
-    scenes().push(createGameOverDialog(title, score, background));
-    if (medal && score >= medal.minScore) pushMedalWindow(medal.def);
-  }
+function createMiniGameScene(entry: MiniGameEntry): Scene {
+  let over = false;
+  const game = entry.start({
+    isOver: () => over,
+    end(score) {
+      if (over) return;
+      over = true;
+      if (!entry.result) return;
+      const { medal } = entry.result;
+      scenes.push(createResultDialog(entry.result, score));
+      if (medal && score >= medal.minScore) showMedalDialog(medal.def);
+    },
+  });
+  return { ...game, opaque: true, bgm: 'mini-game', pauseMenu: createPauseMenu };
 }
 
 /** Enters a mini game with the peephole transition and shows its start dialog on top. */
 export function startMiniGame(entry: MiniGameEntry): void {
-  scenes().push(TransitionScene.push(() => [entry.create(), createMiniGameStartDialog(entry)]));
+  scenes.push(transitionTo(() => [createMiniGameScene(entry), createStartDialog(entry)]));
+}
+
+function createStartDialog(entry: MiniGameEntry): Scene {
+  const rulesClass = entry.preformattedRules === true ? 'start-rules preformatted' : 'start-rules';
+  return createDialog(
+    [
+      image(entry.starImage, 'start-star'),
+      h('div', { class: 'start-title', text: entry.title }),
+      h('div', { class: 'start-creator', text: entry.creator }),
+      h('div', { class: 'start-description' }, ...withLineBreaks(entry.description)),
+      h('div', { class: 'start-rules-title', text: 'ルール' }),
+      h('div', { class: rulesClass }, ...withLineBreaks(entry.howToPlay)),
+      button('Start', closeTop),
+    ],
+    { kind: 'notice', width: 600, height: 400, panelClass: 'start-panel' },
+  );
+}
+
+function createResultDialog({ title, background }: ResultScreen, score: number): Scene {
+  return createDialog(
+    [
+      h('div', { class: 'gameover-title', text: title }),
+      h('div', { class: 'gameover-score', text: String(score) }),
+      h(
+        'div',
+        { class: 'button-list' },
+        button('Back to Main Menu', () => backTo('main-menu')),
+        button('Back to Space', () => backTo('space')),
+      ),
+    ],
+    { kind: 'blocking', width: 300, height: 200, panelClass: 'gameover-panel', panelBackground: background },
+  );
 }

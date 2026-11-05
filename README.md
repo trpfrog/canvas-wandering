@@ -40,7 +40,7 @@ src/
 ├── engine/        Game-agnostic pieces: scene stack, input, audio, geometry, canvas stage
 ├── game/
 │   ├── space/       The open world (map, rocket, constellation, HUD)
-│   ├── mini-games/  One file per mini game; add it to registry.ts to put it in space
+│   ├── mini-games/  One file per mini game; list it in index.ts to put it in space
 │   └── ui/          HTML dialogs drawn above the canvas
 └── assets/        Converted images, sounds and fonts (see scripts/convert-assets.sh)
 ```

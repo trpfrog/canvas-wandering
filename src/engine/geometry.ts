@@ -1,4 +1,7 @@
-import type { Point } from './stage';
+export interface Point {
+  x: number;
+  y: number;
+}
 
 /** A hit box in coordinates relative to its owner (before rotation and translation). */
 export type Shape =

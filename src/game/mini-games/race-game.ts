@@ -3,63 +3,49 @@ import { drawRotated, arcDegrees } from '../../engine/draw';
 import { advance, clamp, normalizeDegrees, toRadians } from '../../engine/geometry';
 import { input } from '../../engine/input';
 import { HEIGHT, WIDTH } from '../../engine/stage';
-import { MiniGameScene, type MiniGameEntry } from './mini-game';
+import type { MiniGame, MiniGameEntry } from './mini-game';
 
 const MAX_SPEED = 500;
-/** Speed added every 10 ms while W/S is held. */
+/** Speed added per tick while W/S is held. */
 const ACCELERATION = 10;
-/** Speed lost every 10 ms by friction. */
+/** Speed lost per tick by friction. */
 const FRICTION = 8;
 
-/** A driving school course with no goal: just drive around. */
-class RaceGame extends MiniGameScene {
-  private readonly car = { x: 100, y: 100, angle: 0, speed: 0 };
+/** A driving school course with no goal: just drive around. There is no result screen either. */
+function start(): MiniGame {
+  const car = { x: 100, y: 100, angle: 0, speed: 0 };
+  return {
+    update(dt) {
+      const keys = input.keys;
+      const forward = keys.has('KeyW');
+      const back = keys.has('KeyS');
 
-  constructor() {
-    // There is no goal, so there is no result screen either.
-    super({ title: '', background: '' });
-  }
+      if (forward) car.speed = clamp(car.speed + ACCELERATION, -MAX_SPEED, MAX_SPEED);
+      if (back) car.speed = clamp(car.speed - ACCELERATION, -MAX_SPEED, MAX_SPEED);
+      // You can only turn while pressing the pedal.
+      if (forward || back) {
+        const turn = (car.speed / MAX_SPEED) * 2;
+        if (keys.has('KeyA')) car.angle = normalizeDegrees(car.angle - turn);
+        if (keys.has('KeyD')) car.angle = normalizeDegrees(car.angle + turn);
+      }
 
-  update(dt: number): void {
-    const car = this.car;
-    const keys = input.keys;
-    const forward = keys.has('KeyW');
-    const back = keys.has('KeyS');
+      // Friction always slows the car down to a standstill.
+      if (car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION);
+      else if (car.speed < 0) car.speed = Math.min(0, car.speed + FRICTION);
 
-    if (forward) car.speed = clamp(car.speed + ACCELERATION, -MAX_SPEED, MAX_SPEED);
-    if (back) car.speed = clamp(car.speed - ACCELERATION, -MAX_SPEED, MAX_SPEED);
-    // You can only turn while pressing the pedal.
-    if (forward || back) {
-      const turn = (car.speed / MAX_SPEED) * 2;
-      if (keys.has('KeyA')) car.angle = normalizeDegrees(car.angle - turn);
-      if (keys.has('KeyD')) car.angle = normalizeDegrees(car.angle + turn);
-    }
+      advance(car, dt);
+    },
+    render(ctx) {
+      ctx.fillStyle = '#111111';
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
-    // Friction always slows the car down to a standstill.
-    if (car.speed > 0) car.speed = Math.max(0, car.speed - FRICTION);
-    else if (car.speed < 0) car.speed = Math.min(0, car.speed + FRICTION);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 5;
+      for (const size of [350, 300]) drawTrack(ctx, size);
 
-    advance(car, dt);
-  }
-
-  render(ctx: CanvasRenderingContext2D): void {
-    ctx.fillStyle = '#111111';
-    ctx.fillRect(0, 0, WIDTH, HEIGHT);
-
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 5;
-    for (const size of [350, 300]) drawTrack(ctx, size);
-
-    drawRotated(
-      ctx,
-      img('race-game/car'),
-      Math.trunc(this.car.x),
-      Math.trunc(this.car.y),
-      80,
-      40,
-      toRadians(this.car.angle),
-    );
-  }
+      drawRotated(ctx, img('race-game/car'), car.x, car.y, 80, 40, toRadians(car.angle));
+    },
+  };
 }
 
 /** A stadium-shaped track centered on the screen. */
@@ -89,5 +75,5 @@ export const raceGame: MiniGameEntry = {
     'ブレーキはありません。勝手に止まるので待ってください。',
   ],
   starImage: 'race-game/star',
-  create: () => new RaceGame(),
+  start,
 };

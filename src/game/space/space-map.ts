@@ -1,7 +1,6 @@
 import type { ImageKey } from '../../engine/assets';
-import { circle, place, type Shape } from '../../engine/geometry';
+import { circle, place, type Point, type Shape } from '../../engine/geometry';
 import { poisson, randomInt, sparsePoints } from '../../engine/random';
-import type { Point } from '../../engine/stage';
 import type { MiniGameEntry } from '../mini-games/mini-game';
 
 export const CHUNK_SIZE = 128;
@@ -10,25 +9,21 @@ export const CHUNKS = 24;
 export const MAP_SIZE = CHUNK_SIZE * CHUNKS;
 export const MAP_DEPTH = 10;
 
-/** The original generated each background star with this probability per pixel. */
+/** Background stars per square pixel. */
 const STAR_DENSITY = 0.000005;
 
 export interface MiniGameStar {
-  readonly kind: 'mini-game';
+  kind: 'mini-game';
   x: number;
   y: number;
-  readonly entry: MiniGameEntry;
+  entry: MiniGameEntry;
 }
 
 export interface ZodiacStar {
-  readonly kind: 'zodiac';
-  readonly x: number;
-  readonly y: number;
-  readonly sign: ZodiacSign;
+  kind: 'zodiac';
+  x: number;
+  y: number;
   touched: boolean;
-  image: ImageKey;
-  /** Half of the drawn image size. */
-  imageRadius: number;
 }
 
 export type EventStar = MiniGameStar | ZodiacStar;
@@ -39,23 +34,6 @@ const ZODIAC_STAR_RADIUS = 35 / 2;
 export function eventStarHitBox(star: EventStar): Shape {
   const r = star.kind === 'mini-game' ? MINI_GAME_STAR_RADIUS : ZODIAC_STAR_RADIUS;
   return place(circle(r), star.x, star.y);
-}
-
-export class Layer {
-  readonly backgroundStars: Point[] = [];
-  readonly eventStars: EventStar[] = [];
-  zodiac: ZodiacSign | null = null;
-
-  constructor(readonly background: ImageKey) {
-    const count = poisson(MAP_SIZE * MAP_SIZE * STAR_DENSITY);
-    for (let i = 0; i < count; i++) {
-      this.backgroundStars.push({ x: randomInt(MAP_SIZE), y: randomInt(MAP_SIZE) });
-    }
-  }
-
-  isWithin(x: number, y: number): boolean {
-    return x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE;
-  }
 }
 
 export interface ZodiacLine {
@@ -69,58 +47,61 @@ export interface ZodiacLine {
  * A constellation hidden in space. Touch its stars in order to light them up;
  * touching them all gives a medal.
  */
-export class ZodiacSign {
-  readonly stars: ZodiacStar[];
-  readonly lines: ZodiacLine[] = [];
-  lineColor = 'rgba(179,179,179,0.25)';
+export interface ZodiacSign {
+  stars: ZodiacStar[];
+  lines: ZodiacLine[];
+  lineColor: string;
+}
 
-  constructor(range: { x: number; y: number; w: number; h: number }, count: number) {
-    this.stars = sparsePoints({ x: 0, y: 0, w: range.w, h: range.h }, 200, count).map((p) => ({
-      kind: 'zodiac',
-      x: p.x + range.x,
-      y: p.y + range.y,
-      sign: this,
-      touched: false,
-      image: 'space/star-dark',
-      imageRadius: 35,
-    }));
+export interface Layer {
+  background: ImageKey;
+  backgroundStars: Point[];
+  eventStars: EventStar[];
+  zodiac?: ZodiacSign;
+}
 
-    const shorten = 50;
-    for (const [a, b] of consecutivePairs(this.stars)) {
-      const angle = Math.atan2(b.y - a.y, b.x - a.x);
-      const dx = Math.cos(angle) * shorten;
-      const dy = Math.sin(angle) * shorten;
-      this.lines.push({ x0: a.x + dx, y0: a.y + dy, x1: b.x - dx, y1: b.y - dy });
-    }
-  }
+export const isOnMap = ({ x, y }: Point): boolean => x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE;
 
-  /**
-   * Called while the rocket touches one of the stars.
-   * @returns whether every star has been lit up
-   */
-  touch(star: ZodiacStar): boolean {
-    const allTouched = this.stars.every((s) => s.touched);
-    const index = this.stars.indexOf(star);
-    const inOrder = this.stars.slice(0, index).every((s) => s.touched);
+function createLayer(background: ImageKey): Layer {
+  const backgroundStars = Array.from({ length: poisson(MAP_SIZE * MAP_SIZE * STAR_DENSITY) }, () => ({
+    x: randomInt(MAP_SIZE),
+    y: randomInt(MAP_SIZE),
+  }));
+  return { background, backgroundStars, eventStars: [] };
+}
 
-    // The lines get brighter the further along the constellation the rocket is.
-    const progress = inOrder ? (index + 1) / this.stars.length : 0;
-    this.lineColor = allTouched ? '#fff' : `rgba(179,179,179,${0.25 + 0.5 * progress})`;
-    if (allTouched || star.touched) return allTouched;
+function createZodiacSign(range: { x: number; y: number; w: number; h: number }, count: number): ZodiacSign {
+  const stars = sparsePoints({ x: 0, y: 0, w: range.w, h: range.h }, 200, count).map((p): ZodiacStar => ({
+    kind: 'zodiac',
+    x: p.x + range.x,
+    y: p.y + range.y,
+    touched: false,
+  }));
+  const shorten = 50;
+  const lines = consecutivePairs(stars).map(([a, b]) => {
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const dx = Math.cos(angle) * shorten;
+    const dy = Math.sin(angle) * shorten;
+    return { x0: a.x + dx, y0: a.y + dy, x1: b.x - dx, y1: b.y - dy };
+  });
+  return { stars, lines, lineColor: 'rgba(179,179,179,0.25)' };
+}
 
-    if (inOrder) {
-      star.touched = true;
-      star.image = 'space/star-bright';
-      star.imageRadius = 30;
-    } else {
-      for (const s of this.stars) {
-        s.touched = false;
-        s.image = 'space/star-dark';
-        s.imageRadius = 30;
-      }
-    }
-    return false;
-  }
+/** Called while the rocket touches one of the sign's stars. Returns whether every star is lit up. */
+export function touchZodiacStar(sign: ZodiacSign, star: ZodiacStar): boolean {
+  const { stars } = sign;
+  const allTouched = stars.every((s) => s.touched);
+  const index = stars.indexOf(star);
+  const inOrder = stars.slice(0, index).every((s) => s.touched);
+
+  // The lines get brighter the further along the constellation the rocket is.
+  const progress = inOrder ? (index + 1) / stars.length : 0;
+  sign.lineColor = allTouched ? '#fff' : `rgba(179,179,179,${0.25 + 0.5 * progress})`;
+  if (allTouched || star.touched) return allTouched;
+
+  if (inOrder) star.touched = true;
+  else for (const s of stars) s.touched = false;
+  return false;
 }
 
 const BACKGROUNDS: readonly ImageKey[] = [
@@ -138,39 +119,36 @@ function consecutivePairs<T>(items: readonly T[]): [T, T][] {
   });
 }
 
-export class SpaceMap {
-  readonly layers: Layer[] = [];
-  private readonly miniGameStars: MiniGameStar[];
+export interface SpaceMap {
+  layerAt: (depth: number) => Layer;
+  /** Moves the mini game stars to new random places that are far enough apart. */
+  scatterMiniGameStars: () => void;
+}
 
-  constructor(miniGames: readonly MiniGameEntry[]) {
-    for (let i = 0; i < MAP_DEPTH; i++) {
-      this.layers.push(new Layer(BACKGROUNDS.at(i % BACKGROUNDS.length) ?? 'space/background-0'));
-    }
-
-    this.miniGameStars = miniGames.map((entry) => ({ kind: 'mini-game', x: 0, y: 0, entry }));
-    for (const star of this.miniGameStars) this.layer(star.entry.depth).eventStars.push(star);
-
-    const zodiacLayer = this.layer(1);
-    zodiacLayer.zodiac = new ZodiacSign({ x: 500, y: 500, w: 2000, h: 2000 }, 12);
-    zodiacLayer.eventStars.push(...zodiacLayer.zodiac.stars);
-
-    this.redistributeMiniGameStars();
-  }
-
-  layer(depth: number): Layer {
-    const layer = this.layers.at(depth);
+export function createSpaceMap(miniGames: readonly MiniGameEntry[]): SpaceMap {
+  const layers = Array.from({ length: MAP_DEPTH }, (_, i) =>
+    createLayer(BACKGROUNDS.at(i % BACKGROUNDS.length) ?? 'space/background-0'),
+  );
+  const layerAt = (depth: number): Layer => {
+    const layer = layers.at(depth);
     if (layer === undefined) throw new RangeError(`No layer at depth ${depth}`);
     return layer;
-  }
+  };
 
-  /** Moves the mini game stars to new random places that are far enough apart. */
-  redistributeMiniGameStars(): void {
+  const miniGameStars = miniGames.map((entry): MiniGameStar => ({ kind: 'mini-game', x: 0, y: 0, entry }));
+  for (const star of miniGameStars) layerAt(star.entry.depth).eventStars.push(star);
+
+  const zodiacLayer = layerAt(1);
+  zodiacLayer.zodiac = createZodiacSign({ x: 500, y: 500, w: 2000, h: 2000 }, 12);
+  zodiacLayer.eventStars.push(...zodiacLayer.zodiac.stars);
+
+  function scatterMiniGameStars(): void {
     const margin = 100;
-    const points = sparsePoints(
-      { x: margin, y: margin, w: MAP_SIZE - 2 * margin, h: MAP_SIZE - 2 * margin },
-      500,
-      this.miniGameStars.length,
-    );
-    this.miniGameStars.forEach((star, i) => Object.assign(star, points[i]));
+    const area = { x: margin, y: margin, w: MAP_SIZE - 2 * margin, h: MAP_SIZE - 2 * margin };
+    const points = sparsePoints(area, 500, miniGameStars.length);
+    miniGameStars.forEach((star, i) => Object.assign(star, points[i]));
   }
+  scatterMiniGameStars();
+
+  return { layerAt, scatterMiniGameStars };
 }
