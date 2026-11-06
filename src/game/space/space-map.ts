@@ -7,7 +7,8 @@ export const CHUNK_SIZE = 128;
 export const CHUNKS = 24;
 /** Width and height of each layer of space. */
 export const MAP_SIZE = CHUNK_SIZE * CHUNKS;
-export const MAP_DEPTH = 10;
+/** Layer 0 holds the mini game stars, layer 1 the hidden constellation; layer 2 is open space. */
+export const MAP_DEPTH = 3;
 
 /** Background stars per square pixel. */
 const STAR_DENSITY = 0.000005;
@@ -104,13 +105,7 @@ export function touchZodiacStar(sign: ZodiacSign, star: ZodiacStar): boolean {
   return false;
 }
 
-const BACKGROUNDS: readonly ImageKey[] = [
-  'space/background-0',
-  'space/background-1',
-  'space/background-2',
-  'space/background-3',
-  'space/background-4',
-];
+const BACKGROUNDS: readonly ImageKey[] = ['space/background-0', 'space/background-1', 'space/background-2'];
 
 function consecutivePairs<T>(items: readonly T[]): [T, T][] {
   return items.slice(1).flatMap((item, i): [T, T][] => {
@@ -139,7 +134,10 @@ export function createSpaceMap(miniGames: readonly MiniGameEntry[]): SpaceMap {
   for (const star of miniGameStars) layerAt(star.entry.depth).eventStars.push(star);
 
   const zodiacLayer = layerAt(1);
-  zodiacLayer.zodiac = createZodiacSign({ x: 500, y: 500, w: 2000, h: 2000 }, 12);
+  // A compact constellation around the middle of the map, right below where the rocket starts.
+  const zodiacSize = 1200;
+  const zodiacCorner = (MAP_SIZE - zodiacSize) / 2;
+  zodiacLayer.zodiac = createZodiacSign({ x: zodiacCorner, y: zodiacCorner, w: zodiacSize, h: zodiacSize }, 12);
   zodiacLayer.eventStars.push(...zodiacLayer.zodiac.stars);
 
   function scatterMiniGameStars(): void {

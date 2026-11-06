@@ -64,3 +64,7 @@ Both mini games are placed on layer 0 next to the original four.
   way back. Now the rocket really slows down the farther it is from the map and cannot get more than
   half a map width past an edge, while the speedometer and the scrolling background keep showing the
   full speed. Off the map, the X/Y readout shows `INF`.
+- **Fewer layers**: the original had 10 layers of space, but only layer 0 (the mini games) and layer 1
+  (the constellation) had anything on them, and layers 5–9 reused the backgrounds of 0–4. Now there
+  are 3 layers, and the constellation is packed into the middle of the map (1200 px square instead of
+  2000 px), right below where the rocket starts.

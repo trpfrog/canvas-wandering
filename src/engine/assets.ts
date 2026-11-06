@@ -16,7 +16,7 @@ const soundUrls = import.meta.glob<string>('../assets/sound/*.mp3', {
 
 export type ImageKey =
   | `menu/background-${1 | 2 | 3 | 4}`
-  | `space/background-${0 | 1 | 2 | 3 | 4}`
+  | `space/background-${0 | 1 | 2}`
   | 'space/rocket'
   | 'space/rocket-stop'
   | 'space/rocket-invincible'

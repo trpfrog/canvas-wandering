@@ -40,7 +40,7 @@ webp "$SRC/space_game/invincibleRocketStop.png" space/rocket-invincible-stop
 webp "$SRC/space_game/medal.png" space/medal
 webp "$SRC/space_game/star1.png" space/star-bright
 webp "$SRC/space_game/star2.png" space/star-dark
-for i in 0 1 2 3 4; do webp "$SRC/space_game/backgrounds/bkg$i.jpg" "space/background-$i"; done
+for i in 0 1 2; do webp "$SRC/space_game/backgrounds/bkg$i.jpg" "space/background-$i"; done
 
 # mini games (star icons are drawn at most 350px)
 webp "$SRC/mini_game/galaxy_express/starImage.png" galaxy-express/star 400
