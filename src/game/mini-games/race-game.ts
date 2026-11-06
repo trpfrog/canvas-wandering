@@ -15,6 +15,16 @@ const FRICTION = 8;
 function start(): MiniGame {
   const car = { x: 100, y: 100, angle: 0, speed: 0 };
   return {
+    touchControls: {
+      left: [
+        { code: 'KeyA', label: '◀' },
+        { code: 'KeyD', label: '▶' },
+      ],
+      right: [
+        { code: 'KeyW', label: '▲' },
+        { code: 'KeyS', label: '▼' },
+      ],
+    },
     update(dt) {
       const keys = input.keys;
       const forward = keys.has('KeyW');

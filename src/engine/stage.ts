@@ -10,6 +10,8 @@ export const HEIGHT = 768;
  */
 export interface Stage {
   canvas: HTMLCanvasElement;
+  /** Layer above the overlay for on-screen controls. */
+  controls: HTMLElement;
   /** Shows exactly these DOM layers above the canvas, the last one on top. */
   showLayers: (layers: readonly HTMLElement[]) => void;
   /** Resets the transform so that drawing uses logical coordinates. */
@@ -28,7 +30,9 @@ export function createStage(container: HTMLElement, { onResize }: { onResize: ()
   if (!ctx) throw new Error('Canvas 2D is not supported');
   const overlay = document.createElement('div');
   overlay.className = 'stage-overlay';
-  root.append(canvas, overlay);
+  const controls = document.createElement('div');
+  controls.className = 'stage-controls';
+  root.append(canvas, overlay, controls);
   container.append(root);
 
   let pixelRatio = 1;
@@ -57,6 +61,7 @@ export function createStage(container: HTMLElement, { onResize }: { onResize: ()
 
   return {
     canvas,
+    controls,
     showLayers(layers) {
       const current = [...overlay.children];
       const unchanged = current.length === layers.length && current.every((c, i) => c === layers[i]);

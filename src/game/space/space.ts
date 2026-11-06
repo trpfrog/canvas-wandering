@@ -2,11 +2,9 @@ import { img, type ImageKey } from '../../engine/assets';
 import * as audio from '../../engine/audio';
 import { drawRotated, drawTiled } from '../../engine/draw';
 import {
-  advance,
   angleDiffDegrees,
   clamp,
   distance,
-  type Heading,
   intersects,
   mod,
   normalizeDegrees,
@@ -25,6 +23,7 @@ import { startMiniGame } from '../mini-games/mini-game';
 import { rocketHitBox } from '../rocket';
 import { showMedalDialog } from '../ui/medal-dialogs';
 import { createPauseMenu } from '../ui/menus';
+import { fly, type Flyer } from './flight';
 import { drawIndicator, drawMiniMap, drawSpeedometer } from './hud';
 import {
   createSpaceMap,
@@ -52,7 +51,7 @@ const TWINKLE_MS = 400;
 const ROCKET_HIT_BOX = rocketHitBox();
 const SCREEN_CENTER = { x: WIDTH / 2, y: HEIGHT / 2 };
 
-interface Rocket extends Heading {
+interface Rocket extends Flyer {
   depth: number;
 }
 
@@ -131,8 +130,8 @@ function addTwinkle(s: SpaceState): void {
 /** Tiles the background with half-speed parallax. */
 function drawBackground(ctx: CanvasRenderingContext2D, rocket: Rocket, image: ImageKey, alpha: number): void {
   const size = 1024;
-  const x0 = mod(-Math.trunc(rocket.x / 2 - WIDTH / 2), size) - size;
-  const y0 = mod(-Math.trunc(rocket.y / 2 - HEIGHT / 2), size) - size;
+  const x0 = mod(-Math.trunc((rocket.x + rocket.drift.x) / 2 - WIDTH / 2), size) - size;
+  const y0 = mod(-Math.trunc((rocket.y + rocket.drift.y) / 2 - HEIGHT / 2), size) - size;
   ctx.globalAlpha = alpha;
   drawTiled(ctx, img(image), size, { width: WIDTH, height: HEIGHT }, x0, y0);
   ctx.globalAlpha = 1;
@@ -212,7 +211,7 @@ function drawTwinkles(ctx: CanvasRenderingContext2D, s: SpaceState): void {
 export function createSpaceScene(): Scene {
   const map = createSpaceMap(miniGames);
   const s: SpaceState = {
-    rocket: { x: MAP_SIZE / 2, y: MAP_SIZE / 2, angle: 0, speed: 0, depth: 0 },
+    rocket: { x: MAP_SIZE / 2, y: MAP_SIZE / 2, angle: 0, speed: 0, depth: 0, drift: { x: 0, y: 0 } },
     now: 0,
     invincibleUntil: 0,
     pendingDepthKeys: new Set(),
@@ -272,6 +271,14 @@ export function createSpaceScene(): Scene {
     opaque: true,
     bgm: 'space',
     pauseMenu: createPauseMenu,
+    // Steering works by dragging; only changing layers needs buttons. They sit above the mini map.
+    touchControls: {
+      right: [
+        { code: 'KeyZ', label: '▲' },
+        { code: 'KeyX', label: '▼' },
+      ],
+      bottom: 200,
+    },
     resume() {
       if (visitedMiniGame) {
         visitedMiniGame = false;
@@ -296,7 +303,7 @@ export function createSpaceScene(): Scene {
     update(dt) {
       s.now += dt;
       controlTick(dt);
-      advance(s.rocket, dt);
+      fly(s.rocket, dt);
       touchTick(dt);
 
       if (input.pointerDown && Math.random() - 0.05 <= s.rocket.speed / MAX_SPEED) addTwinkle(s);

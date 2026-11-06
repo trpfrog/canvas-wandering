@@ -30,6 +30,9 @@ export interface Scene {
   /** Called after the scene was removed from the stack for good. */
   dispose?: () => void;
 
+  /** On-screen buttons for the keys this scene needs, shown on touch screens. */
+  touchControls?: TouchControls;
+
   /** The scene pushed when the player presses Escape, if this scene can be paused. */
   pauseMenu?: () => Scene;
 
@@ -40,6 +43,20 @@ export interface Scene {
   pointerMove?: (p: Point) => void;
   click?: (p: Point) => void;
   wheel?: (deltaY: number) => void;
+}
+
+/** An on-screen button that holds down a keyboard key while it is touched. */
+export interface TouchKey {
+  /** `KeyboardEvent.code` of the key. */
+  code: string;
+  label: string;
+}
+
+/** Button groups in the lower corners; `bottom` lifts them above HUD elements (logical px). */
+export interface TouchControls {
+  left?: readonly TouchKey[];
+  right?: readonly TouchKey[];
+  bottom?: number;
 }
 
 /** Called whenever the stack changes, with the visible scenes and the music that should play. */

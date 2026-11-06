@@ -1,11 +1,21 @@
 import { loadFonts, loadImages } from '../engine/assets';
 import * as audio from '../engine/audio';
 import type { Scene } from '../engine/scene';
+import { isTouchScreen } from '../engine/touch-controls';
 import { scenes } from './scenes';
 import { createMainMenu } from './title';
 import { h } from './ui/dom';
 
+/** On phones, use the whole screen where the browser allows it (not on iPhone). */
+async function enterFullscreen(): Promise<void> {
+  if (!isTouchScreen() || !document.fullscreenEnabled) return;
+  await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+}
+
 function startGame(): void {
+  enterFullscreen().catch(() => {
+    // Fullscreen is a nicety; the game fits any window.
+  });
   audio.unlock();
   scenes.reset(createMainMenu());
 }

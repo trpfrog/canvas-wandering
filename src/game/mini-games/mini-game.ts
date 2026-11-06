@@ -1,5 +1,6 @@
 import type { ImageKey } from '../../engine/assets';
 import type { Scene } from '../../engine/scene';
+import { isTouchScreen } from '../../engine/touch-controls';
 import type { MedalDef } from '../medals';
 import { backTo, closeTop, scenes } from '../scenes';
 import { transitionTo } from '../transition';
@@ -11,7 +12,7 @@ import { createPauseMenu } from '../ui/menus';
 /** The parts of a scene a mini game provides; the rest is the same for every mini game. */
 export type MiniGame = Pick<
   Scene,
-  'update' | 'render' | 'dispose' | 'keyDown' | 'pointerDown' | 'pointerUp' | 'pointerMove' | 'click'
+  'update' | 'render' | 'dispose' | 'keyDown' | 'pointerDown' | 'pointerUp' | 'pointerMove' | 'click' | 'touchControls'
 >;
 
 /** What a running mini game can ask of the game around it. */
@@ -79,7 +80,8 @@ function createStartDialog(entry: MiniGameEntry): Scene {
       h('div', { class: rulesClass }, ...withLineBreaks(entry.howToPlay)),
       button('Start', closeTop),
     ],
-    { kind: 'notice', width: 600, height: 400, panelClass: 'start-panel' },
+    // Wider on touch screens, where the rules are set in a larger font.
+    { kind: 'notice', width: isTouchScreen() ? 820 : 600, height: 400, panelClass: 'start-panel' },
   );
 }
 

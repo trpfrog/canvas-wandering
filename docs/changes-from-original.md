@@ -55,3 +55,12 @@ Both mini games are placed on layer 0 next to the original four.
 - **Dialogs** are HTML on top of the canvas; the blurred background uses `backdrop-filter`.
 - Assets are converted for the web: WAV → MP3 and PNG/JPEG → WebP (64 MB → 5 MB). See
   `scripts/convert-assets.sh`.
+- **Touch screens** get on-screen buttons for the keyboard-only controls (pause, changing layers,
+  the race game's pedals and steering) and larger text. On Android the game goes fullscreen on start.
+
+## New behavior
+
+- **Leaving the map**: the original let the rocket fly away forever, which made it hard to find the
+  way back. Now the rocket really slows down the farther it is from the map and cannot get more than
+  half a map width past an edge, while the speedometer and the scrolling background keep showing the
+  full speed. Off the map, the X/Y readout shows `INF`.

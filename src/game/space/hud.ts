@@ -110,6 +110,9 @@ const clockFormat = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: 
 /** Keeps only the last `digits` digits, like a mechanical counter. */
 const lastDigits = (value: number, digits: number): string => String(Math.trunc(value)).slice(-digits);
 
+/** A coordinate off the map reads as out of range, so it never shows how far out the rocket really is. */
+const coordinate = (value: number): string => (value < 0 || value >= MAP_SIZE ? 'INF' : lastDigits(value, 5));
+
 /** The LCD-like bar at the top of the screen. */
 export function drawIndicator(
   ctx: CanvasRenderingContext2D,
@@ -119,8 +122,8 @@ export function drawIndicator(
   ctx.drawImage(back, 0, 0, WIDTH, BAR_HEIGHT);
 
   const values: [Box, string][] = [
-    [boxes.x, lastDigits(state.x, 5)],
-    [boxes.y, lastDigits(state.y, 5)],
+    [boxes.x, coordinate(state.x)],
+    [boxes.y, coordinate(state.y)],
     [boxes.depth, lastDigits(state.depth, 1)],
     [boxes.clock, clockFormat.format(new Date())],
     [boxes.cleared, String(state.medals)],

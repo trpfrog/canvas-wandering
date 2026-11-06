@@ -2,6 +2,7 @@ import { img } from '../../engine/assets';
 import { arcDegrees, fillTextCentered } from '../../engine/draw';
 import { normalizeDegrees } from '../../engine/geometry';
 import { HEIGHT, WIDTH } from '../../engine/stage';
+import { isTouchScreen } from '../../engine/touch-controls';
 import { MEDALS } from '../medals';
 import type { MiniGame, MiniGameEntry, MiniGameSession } from './mini-game';
 import { drawStarryBackground } from './starry-background';
@@ -31,6 +32,7 @@ interface Star {
 }
 
 const COUPLE_HEIGHT = 300;
+const startHint = isTouchScreen() ? 'TAP TO START' : 'PRESS SPACE KEY TO START';
 
 /** The couple in the lower right corner, hugging or looking up at the sky. */
 function couplePlacement(looking: boolean): { image: HTMLImageElement; x: number; y: number; w: number } {
@@ -149,7 +151,7 @@ function start({ end, isOver }: MiniGameSession): MiniGame {
       ctx.font = 'bold 30px monospace';
       const text =
         startedAt === undefined
-          ? 'PRESS SPACE KEY TO START'
+          ? startHint
           : `${String(Math.trunc(remaining / 1000)).padStart(2)}.${String(remaining % 1000).padStart(3, '0')} seconds left`;
       ctx.fillText(text, 10, 40);
     },

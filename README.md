@@ -9,12 +9,14 @@ It runs entirely in the browser — no server, no plugins.
 
 ## How to play
 
-|                         | Keyboard | Mouse                                                           |
+|                         | Keyboard | Mouse / touch                                                   |
 | ----------------------- | -------- | --------------------------------------------------------------- |
 | Accelerate / decelerate | W / S    | Hold the button; far from the rocket speeds up, near slows down |
 | Turn                    | A / D    | Hold the button; the rocket turns towards the pointer           |
-| Change layer (depth)    | Z / X    | Wheel                                                           |
-| Pause                   | Esc      |                                                                 |
+| Change layer (depth)    | Z / X    | Wheel / ▲ ▼ buttons                                             |
+| Pause                   | Esc      | Ⅱ button (touch screens)                                        |
+
+On phones and tablets, buttons appear for everything that needs a keyboard. Landscape is recommended.
 
 Fly into a mini game star (yellow dots on the mini map) to play it. Some games give you a medal,
 and there is a hidden constellation somewhere on layer 1.

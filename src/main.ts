@@ -3,6 +3,7 @@ import * as audio from './engine/audio';
 import { bindInput } from './engine/input';
 import { TICK_MS } from './engine/scene';
 import { createStage } from './engine/stage';
+import { isTouchScreen, showTouchControls } from './engine/touch-controls';
 import { createBootScreen } from './game/boot';
 import { scenes } from './game/scenes';
 
@@ -28,9 +29,13 @@ import { scenes } from './game/scenes';
 const container = document.querySelector<HTMLElement>('#app');
 if (!container) throw new Error('#app is missing');
 
+// Lets the CSS size the UI for fingers.
+if (isTouchScreen()) document.documentElement.dataset.input = 'touch';
+
 const stage = createStage(container, { onResize: scenes.invalidate });
 scenes.onChange((visible, bgm) => {
   stage.showLayers(visible.flatMap((scene) => scene.element ?? []));
+  showTouchControls(stage.controls, visible.at(-1));
   audio.playBgm(bgm);
 });
 bindInput(stage, scenes);
