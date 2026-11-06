@@ -84,3 +84,31 @@ describe('createSceneStack', () => {
     expect(stack.top()).toBe(a);
   });
 });
+
+describe('createSceneStack without resuming in between', () => {
+  it('replaces the top without resuming the scene below', () => {
+    const { stack } = setup();
+    const below = fakeScene('below', true);
+    const old = fakeScene('old', false);
+    const next = fakeScene('next', true);
+    stack.push(below);
+    stack.push(old);
+    stack.replaceTop(next);
+    expect(below.log).toEqual(['below:resume', 'below:suspend']);
+    expect(next.log).toEqual(['next:resume']);
+    expect(stack.visibleScenes()).toEqual([next]);
+  });
+
+  it('resumes only the scene popUntil stops at', () => {
+    const { stack } = setup();
+    const menu = { ...fakeScene('menu', true), tag: 'main-menu' };
+    const space = fakeScene('space', true);
+    stack.push(menu);
+    stack.push(space);
+    stack.push(fakeScene('pause', false));
+    stack.popUntil((s) => s.tag === 'main-menu');
+    expect(space.log).toEqual(['space:resume', 'space:suspend', 'space:dispose']);
+    expect(stack.top()).toBe(menu);
+    expect(menu.log).toEqual(['menu:resume', 'menu:suspend', 'menu:resume']);
+  });
+});

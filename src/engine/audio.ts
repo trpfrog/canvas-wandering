@@ -56,11 +56,15 @@ applyVolume();
 /** Loads what the menu needs and keeps loading the rest in the background. */
 export async function load(): Promise<void> {
   await Promise.all(ESSENTIAL.map(loadSound));
-  for (const key of DEFERRED) void loadSound(key).then(() => playBgm(wantedMusic));
+  for (const key of DEFERRED) {
+    // The game works without these tracks, so a failure is only reported.
+    loadSound(key).then(() => playBgm(wantedMusic), reportError);
+  }
 }
 
 async function loadSound(key: SoundKey): Promise<void> {
   const res = await fetch(soundUrl(key));
+  if (!res.ok) throw new Error(`Failed to load ${key}: HTTP ${res.status}`);
   buffers.set(key, await ctx.decodeAudioData(await res.arrayBuffer()));
 }
 

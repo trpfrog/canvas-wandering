@@ -51,11 +51,13 @@ export interface SceneStack {
   /** Pushes a scene, plus scenes stacked on top of it (e.g. a start dialog). */
   push: (scene: Scene, ...above: Scene[]) => void;
   pop: () => void;
+  /** Replaces the top scene; the scene below is not resumed in between. */
+  replaceTop: (scene: Scene, ...above: Scene[]) => void;
   /** Pops `scene` if it is on top; does nothing otherwise. */
   remove: (scene: Scene) => void;
   /** Removes every scene and starts over with the given one. */
   reset: (scene: Scene) => void;
-  /** Pops scenes until the predicate holds for the top scene. */
+  /** Pops scenes until the predicate holds for the top scene, resuming only that one. */
   popUntil: (predicate: (scene: Scene) => boolean) => void;
   /** Scenes to draw, bottom first: the topmost opaque scene and everything above it. */
   visibleScenes: () => Scene[];
@@ -89,11 +91,14 @@ export function createSceneStack(): SceneStack {
     for (const listener of listeners) listener(visibleScenes(), bgm());
   }
 
-  function pop(): void {
-    const popped = stack.pop();
-    if (!popped) return;
-    popped.suspend?.();
-    popped.dispose?.();
+  /** Disposes of the top `n` scenes; only the top one is active and needs suspending. */
+  function discard(n: number): void {
+    top()?.suspend?.();
+    for (const scene of stack.splice(-n).toReversed()) scene.dispose?.();
+  }
+
+  /** Announces the new stack and resumes its top. */
+  function settle(): void {
     changed();
     top()?.resume?.();
   }
@@ -101,27 +106,38 @@ export function createSceneStack(): SceneStack {
   function push(scene: Scene, ...above: Scene[]): void {
     top()?.suspend?.();
     stack.push(scene, ...above);
-    changed();
-    top()?.resume?.();
+    settle();
   }
 
   return {
     top,
     has: (predicate) => stack.some(predicate),
     push,
-    pop,
+    pop() {
+      if (stack.length === 0) return;
+      discard(1);
+      settle();
+    },
+    replaceTop(scene, ...above) {
+      if (stack.length > 0) discard(1);
+      stack.push(scene, ...above);
+      settle();
+    },
     remove(scene) {
-      if (top() === scene) pop();
+      if (top() !== scene) return;
+      discard(1);
+      settle();
     },
     reset(scene) {
-      for (const s of stack.splice(0).toReversed()) {
-        s.suspend?.();
-        s.dispose?.();
-      }
-      push(scene);
+      if (stack.length > 0) discard(stack.length);
+      stack.push(scene);
+      settle();
     },
     popUntil(predicate) {
-      for (let s = top(); s !== undefined && !predicate(s); s = top()) pop();
+      const keep = stack.findLastIndex(predicate) + 1;
+      if (keep === stack.length) return;
+      discard(stack.length - keep);
+      settle();
     },
     visibleScenes,
     update: (dt) => top()?.update?.(dt),

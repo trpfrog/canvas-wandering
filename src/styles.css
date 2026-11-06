@@ -191,6 +191,7 @@ body {
 }
 
 .dialog-panel {
+  outline: none;
   position: relative;
   padding: 20px;
   border-radius: 15px;

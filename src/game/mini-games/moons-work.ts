@@ -128,7 +128,8 @@ function updateMeteorites(state: MoonsWorkState, dt: number): void {
     const hitsMoon = intersects(moon, hitBox);
     const hitsEarth = intersects(earthHitBox, hitBox);
     if (hitsMoon) {
-      state.score++;
+      // The score is final once the earth is gone.
+      if (!state.earthExplosion) state.score++;
       explode(state, bounds(hitBox));
     }
     if (hitsEarth) destroyEarth(state);
@@ -144,9 +145,10 @@ function updateRockets(state: MoonsWorkState, dt: number): void {
     const hitBox = placedRocketHitBox(r);
     const hitsMoon = intersects(moon, hitBox);
     const landed = !r.leaving && circleContainsRect(earthHitBox, bounds(hitBox));
-    if (landed) state.lives++;
+    const counts = !state.earthExplosion;
+    if (landed && counts) state.lives++;
     if (hitsMoon) {
-      state.lives--;
+      if (counts) state.lives--;
       if (state.lives === 0) destroyEarth(state);
       explode(state, bounds(hitBox));
     }

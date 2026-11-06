@@ -23,7 +23,7 @@ export interface DialogOptions {
 /** A dialog shown above the current scene with a darkened background. */
 export function createDialog(content: readonly HTMLElement[], options: DialogOptions): Scene {
   const { kind, width, height, panelClass, panelBackground = '', onResume } = options;
-  const panel = h('div', { class: `dialog-panel ${panelClass}` }, ...content);
+  const panel = h('div', { class: `dialog-panel ${panelClass}`, attrs: { tabindex: '-1' } }, ...content);
   Object.assign(panel.style, { width: `${width}px`, minHeight: `${height}px`, background: panelBackground });
   const element = h('div', { class: `dialog-backdrop ${kind}` }, panel);
 
@@ -34,8 +34,11 @@ export function createDialog(content: readonly HTMLElement[], options: DialogOpt
       if (e.code === 'Escape' && !e.repeat && kind === 'menu') scenes.remove(dialog);
     },
     resume() {
-      // Focus the first control so that the dialog also works from the keyboard.
-      panel.querySelector<HTMLElement>('input, button')?.focus();
+      // Focus a control so that the dialog also works from the keyboard. Buttons of a blocking
+      // dialog are left alone, so that a key pressed twice cannot pick one by accident.
+      const control = panel.querySelector<HTMLElement>(kind === 'blocking' ? 'input' : 'input, button');
+      if (control) control.focus();
+      else panel.focus();
       onResume?.();
     },
   };

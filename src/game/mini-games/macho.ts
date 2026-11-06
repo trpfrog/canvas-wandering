@@ -4,6 +4,7 @@
 import { img } from '../../engine/assets';
 import { fillTextCentered } from '../../engine/draw';
 import { clamp, toRadians, type Point } from '../../engine/geometry';
+import { input } from '../../engine/input';
 import { HEIGHT, WIDTH } from '../../engine/stage';
 import { MEDALS } from '../medals';
 import type { MiniGame, MiniGameEntry, MiniGameSession } from './mini-game';
@@ -44,6 +45,8 @@ function start({ end, isOver }: MiniGameSession): MiniGame {
       drag = undefined;
     },
     pointerMove(p) {
+      // The button may have been released while a pause menu was open.
+      if (!input.pointerDown) drag = undefined;
       if (drag === undefined || isOver()) return;
       // Only whole degrees count, so short drags do nothing: it takes muscle.
       const delta = Math.trunc((p.x - drag.startX) / PX_PER_DEGREE);

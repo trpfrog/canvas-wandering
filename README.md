@@ -60,6 +60,7 @@ scripts/convert-assets.sh path/to/medipro-game path/to/pr-assets
 
 See [docs/changes-from-original.md](docs/changes-from-original.md) for fixed bugs, the two mini games
 merged from unmerged upstream pull requests, and web-specific changes.
+How the remaster came together (in Japanese): [docs/making-of.md](docs/making-of.md).
 
 ## Credits
 

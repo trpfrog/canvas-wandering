@@ -12,14 +12,15 @@ export const input: { keys: Set<string>; pointer: Point; pointerDown: boolean } 
   pointerDown: false,
 };
 
-function isTextField(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement && target.type !== 'range';
+/** Form controls keep their own keyboard behavior (typing, sliders, pressing buttons with Space). */
+function isFormControl(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('input, button, select, textarea') !== null;
 }
 
 /** Routes browser events to the top scene, and opens its pause menu on Escape. */
 export function bindInput(stage: Stage, scenes: SceneStack): void {
   window.addEventListener('keydown', (e) => {
-    if (BLOCKED_KEYS.has(e.code) && !isTextField(e.target)) e.preventDefault();
+    if (BLOCKED_KEYS.has(e.code) && !isFormControl(e.target)) e.preventDefault();
     input.keys.add(e.code);
     const top = scenes.top();
     if (e.code === 'Escape' && !e.repeat && top?.pauseMenu) scenes.push(top.pauseMenu());

@@ -41,9 +41,7 @@ export function transitionTo(next: () => [Scene, ...Scene[]]): Scene {
       if (open > 0) return;
       blackMs += dt;
       if (blackMs < BLACK_HOLD_MS) return;
-      scenes.pop();
-      scenes.push(...next());
-      scenes.push(openingTransition());
+      scenes.replaceTop(...next(), openingTransition());
     },
     render: () => peephole.setOpen(open),
   };
