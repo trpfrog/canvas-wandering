@@ -1,6 +1,7 @@
 /**
  * Background music and sound effects. Import as a namespace: `import * as audio from './audio'`.
  */
+import * as v from 'valibot';
 import { soundUrl, type SoundKey } from './assets';
 import { loadJson, saveJson } from './storage';
 
@@ -24,18 +25,9 @@ const LOOP_START: Record<SoundKey, number> = {
 const ESSENTIAL: readonly SoundKey[] = ['bgm-menu', 'se-rocket', 'se-achievement', 'se-explosion'];
 const DEFERRED: readonly SoundKey[] = ['bgm-space', 'bgm-mini-game'];
 
-export interface Volume {
-  bgm: number;
-  se: number;
-}
-
-const isVolume = (v: unknown): v is Volume =>
-  typeof v === 'object' &&
-  v !== null &&
-  'bgm' in v &&
-  'se' in v &&
-  typeof v.bgm === 'number' &&
-  typeof v.se === 'number';
+const Level = v.pipe(v.number(), v.minValue(0), v.maxValue(1));
+const VolumeSchema = v.object({ bgm: Level, se: Level });
+export type Volume = v.InferOutput<typeof VolumeSchema>;
 
 const ctx = new AudioContext();
 const bgmGain = ctx.createGain();
@@ -44,7 +36,7 @@ bgmGain.connect(ctx.destination);
 seGain.connect(ctx.destination);
 
 const buffers = new Map<SoundKey, AudioBuffer>();
-let currentVolume: Volume = loadJson('volume', { bgm: 0.2, se: 0.2 }, isVolume);
+let currentVolume: Volume = loadJson('volume', VolumeSchema, { bgm: 0.2, se: 0.2 });
 /** The requested music, which may still be loading. */
 let wantedMusic: Music = 'silence';
 let currentBgm: { id: BgmId; source: AudioBufferSourceNode } | undefined;

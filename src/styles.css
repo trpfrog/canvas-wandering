@@ -61,7 +61,9 @@ body {
   pointer-events: none;
 }
 
-.stage-overlay > * {
+/* Each scene's layer, and the screen rendered into it, fill the stage. */
+.stage-overlay > *,
+.stage-overlay > * > * {
   position: absolute;
   inset: 0;
 }

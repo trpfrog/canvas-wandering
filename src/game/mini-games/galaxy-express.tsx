@@ -1,3 +1,4 @@
+import { createRef } from 'preact';
 import { img } from '../../engine/assets';
 import { randomInt } from '../../engine/random';
 import type { Scene } from '../../engine/scene';
@@ -5,7 +6,7 @@ import { HEIGHT, WIDTH } from '../../engine/stage';
 import { every } from '../../engine/timing';
 import { scenes } from '../scenes';
 import { createDialog } from '../ui/dialog';
-import { button, h } from '../ui/dom';
+import { Button } from '../ui/dom';
 import type { MiniGame, MiniGameEntry, MiniGameSession } from './mini-game';
 
 interface Train {
@@ -47,29 +48,38 @@ function start({ end }: MiniGameSession): MiniGame {
 
 /** Asks for the number of trains; the closer the answer, the higher the score. */
 function createAnswerDialog(correctAnswer: number, onScore: (score: number) => void): Scene {
-  const field = h('input', { class: 'answer-input', attrs: { type: 'number', inputmode: 'numeric', min: '0' } });
+  const field = createRef<HTMLInputElement>();
   const submit = () => {
-    if (Number.isNaN(field.valueAsNumber)) {
-      field.focus();
+    const input = field.current;
+    if (!input) return;
+    if (Number.isNaN(input.valueAsNumber)) {
+      input.focus();
       return;
     }
-    const answer = Math.trunc(field.valueAsNumber);
+    const answer = Math.trunc(input.valueAsNumber);
     onScore(Math.max(0, 100 - 5 * Math.abs(answer - correctAnswer)));
   };
-  field.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submit();
-  });
 
   return createDialog(
-    [
-      h(
-        'div',
-        { class: 'answer-message' },
-        h('p', { text: '電車はいくつあった？' }),
-        h('p', { text: '正解との差がすくないほど点が高いよ' }),
-      ),
-      h('div', { class: 'answer-form' }, field, button('OK', submit)),
-    ],
+    <>
+      <div class="answer-message">
+        <p>電車はいくつあった？</p>
+        <p>正解との差がすくないほど点が高いよ</p>
+      </div>
+      <div class="answer-form">
+        <input
+          ref={field}
+          class="answer-input"
+          type="number"
+          inputMode="numeric"
+          min={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+          }}
+        />
+        <Button onClick={submit}>OK</Button>
+      </div>
+    </>,
     { kind: 'blocking', width: WIDTH - 70, height: HEIGHT - 80, panelClass: 'answer-panel' },
   );
 }

@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import type { ImageKey } from '../engine/assets';
 import { loadJson, saveJson } from '../engine/storage';
 
@@ -17,25 +18,10 @@ export const MEDALS = {
 
 const ALL_MEDALS: readonly MedalDef[] = Object.values(MEDALS);
 
-interface StoredMedal {
-  id: string;
-  acquiredAt: number;
-}
-
-const isStoredMedal = (v: unknown): v is StoredMedal =>
-  typeof v === 'object' &&
-  v !== null &&
-  'id' in v &&
-  'acquiredAt' in v &&
-  typeof v.id === 'string' &&
-  typeof v.acquiredAt === 'number';
-
-const isStoredMedalList = (v: unknown): v is StoredMedal[] => Array.isArray(v) && v.every(isStoredMedal);
+const StoredMedalsSchema = v.array(v.object({ id: v.string(), acquiredAt: v.number() }));
 
 /** The medals the player has, persisted in localStorage. */
-const acquired: StoredMedal[] = loadJson('medals', [], isStoredMedalList).filter((m) =>
-  ALL_MEDALS.some((def) => def.id === m.id),
-);
+const acquired = loadJson('medals', StoredMedalsSchema, []).filter((m) => ALL_MEDALS.some((def) => def.id === m.id));
 
 export const hasMedal = (medal: MedalDef): boolean => acquired.some((m) => m.id === medal.id);
 

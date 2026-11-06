@@ -2,8 +2,8 @@ import * as audio from '../../engine/audio';
 import type { Scene } from '../../engine/scene';
 import { acquiredMedals, awardMedal, hasMedal, type MedalDef } from '../medals';
 import { closeTop, scenes } from '../scenes';
-import { createDialog, withLineBreaks } from './dialog';
-import { button, h, image } from './dom';
+import { createDialog } from './dialog';
+import { Button, Image, Lines } from './dom';
 
 const dateFormat = new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit' });
 const timeFormat = new Intl.DateTimeFormat('ja-JP', {
@@ -15,29 +15,26 @@ const timeFormat = new Intl.DateTimeFormat('ja-JP', {
 
 export function createMedalCollection(): Scene {
   const medals = acquiredMedals();
-  const body =
-    medals.length > 0
-      ? h(
-          'ul',
-          { class: 'medal-list' },
-          ...medals.map(({ medal, acquiredAt }) =>
-            h(
-              'li',
-              {},
-              image(medal.image),
-              h('span', { class: 'medal-title', text: medal.title }),
-              h(
-                'span',
-                { class: 'medal-date' },
-                ...withLineBreaks([dateFormat.format(acquiredAt), timeFormat.format(acquiredAt)]),
-              ),
-            ),
-          ),
-        )
-      : h('div', { class: 'no-medals', text: 'You have no medals yet.' });
-
   return createDialog(
-    [h('div', { class: 'title-font medals-title', text: 'Medal Collections' }), body, button('Close', closeTop)],
+    <>
+      <div class="title-font medals-title">Medal Collections</div>
+      {medals.length > 0 ? (
+        <ul class="medal-list">
+          {medals.map(({ medal, acquiredAt }) => (
+            <li key={medal.id}>
+              <Image src={medal.image} />
+              <span class="medal-title">{medal.title}</span>
+              <span class="medal-date">
+                <Lines lines={[dateFormat.format(acquiredAt), timeFormat.format(acquiredAt)]} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div class="no-medals">You have no medals yet.</div>
+      )}
+      <Button onClick={closeTop}>Close</Button>
+    </>,
     { kind: 'menu', width: 500, height: 400, panelClass: 'light-panel medals-panel' },
   );
 }
@@ -50,12 +47,15 @@ export function showMedalDialog(medal: MedalDef): boolean {
   if (hasMedal(medal)) return false;
   scenes.push(
     createDialog(
-      [
-        h('div', { class: 'medal-get-title', text: 'You got a medal!' }),
-        h('div', { class: 'medal-get-visual' }, h('div', { class: 'medal-rays' }), image(medal.image)),
-        h('div', { class: 'medal-get-name', text: medal.title }),
-        button('I got it', closeTop),
-      ],
+      <>
+        <div class="medal-get-title">You got a medal!</div>
+        <div class="medal-get-visual">
+          <div class="medal-rays" />
+          <Image src={medal.image} />
+        </div>
+        <div class="medal-get-name">{medal.title}</div>
+        <Button onClick={closeTop}>I got it</Button>
+      </>,
       {
         kind: 'notice',
         width: 300,

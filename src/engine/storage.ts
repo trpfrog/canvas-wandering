@@ -1,15 +1,21 @@
+import * as v from 'valibot';
+
 const PREFIX = 'space-wandering:v1:';
 
 /**
  * Reads a JSON value from localStorage. Storage may be unavailable or hold
  * anything, so missing, broken or unexpected data falls back.
  */
-export function loadJson<T>(key: string, fallback: T, isValid: (value: unknown) => value is T): T {
+export function loadJson<const Schema extends v.GenericSchema>(
+  key: string,
+  schema: Schema,
+  fallback: v.InferOutput<Schema>,
+): v.InferOutput<Schema> {
   try {
     const raw = localStorage.getItem(PREFIX + key);
     if (raw === null) return fallback;
-    const value: unknown = JSON.parse(raw);
-    return isValid(value) ? value : fallback;
+    const result = v.safeParse(schema, JSON.parse(raw));
+    return result.success ? result.output : fallback;
   } catch {
     return fallback;
   }

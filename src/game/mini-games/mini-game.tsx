@@ -4,8 +4,8 @@ import { isTouchScreen } from '../../engine/touch-controls';
 import type { MedalDef } from '../medals';
 import { backTo, closeTop, scenes } from '../scenes';
 import { transitionTo } from '../transition';
-import { createDialog, withLineBreaks } from '../ui/dialog';
-import { button, h, image } from '../ui/dom';
+import { createDialog } from '../ui/dialog';
+import { Button, Image, Lines } from '../ui/dom';
 import { showMedalDialog } from '../ui/medal-dialogs';
 import { createPauseMenu } from '../ui/menus';
 
@@ -71,15 +71,19 @@ export function startMiniGame(entry: MiniGameEntry): void {
 function createStartDialog(entry: MiniGameEntry): Scene {
   const rulesClass = entry.preformattedRules === true ? 'start-rules preformatted' : 'start-rules';
   return createDialog(
-    [
-      image(entry.starImage, 'start-star'),
-      h('div', { class: 'start-title', text: entry.title }),
-      h('div', { class: 'start-creator', text: entry.creator }),
-      h('div', { class: 'start-description' }, ...withLineBreaks(entry.description)),
-      h('div', { class: 'start-rules-title', text: 'ルール' }),
-      h('div', { class: rulesClass }, ...withLineBreaks(entry.howToPlay)),
-      button('Start', closeTop),
-    ],
+    <>
+      <Image src={entry.starImage} class="start-star" />
+      <div class="start-title">{entry.title}</div>
+      <div class="start-creator">{entry.creator}</div>
+      <div class="start-description">
+        <Lines lines={entry.description} />
+      </div>
+      <div class="start-rules-title">ルール</div>
+      <div class={rulesClass}>
+        <Lines lines={entry.howToPlay} />
+      </div>
+      <Button onClick={closeTop}>Start</Button>
+    </>,
     // Wider on touch screens, where the rules are set in a larger font.
     { kind: 'notice', width: isTouchScreen() ? 820 : 600, height: 400, panelClass: 'start-panel' },
   );
@@ -87,16 +91,14 @@ function createStartDialog(entry: MiniGameEntry): Scene {
 
 function createResultDialog({ title, background }: ResultScreen, score: number): Scene {
   return createDialog(
-    [
-      h('div', { class: 'gameover-title', text: title }),
-      h('div', { class: 'gameover-score', text: String(score) }),
-      h(
-        'div',
-        { class: 'button-list' },
-        button('Back to Main Menu', () => backTo('main-menu')),
-        button('Back to Space', () => backTo('space')),
-      ),
-    ],
+    <>
+      <div class="gameover-title">{title}</div>
+      <div class="gameover-score">{score}</div>
+      <div class="button-list">
+        <Button onClick={() => backTo('main-menu')}>Back to Main Menu</Button>
+        <Button onClick={() => backTo('space')}>Back to Space</Button>
+      </div>
+    </>,
     { kind: 'blocking', width: 300, height: 200, panelClass: 'gameover-panel', panelBackground: background },
   );
 }

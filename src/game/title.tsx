@@ -6,7 +6,7 @@ import { HEIGHT, WIDTH } from '../engine/stage';
 import { every } from '../engine/timing';
 import { scenes } from './scenes';
 import { createSpaceScene } from './space/space';
-import { button, h } from './ui/dom';
+import { Button, mount } from './ui/dom';
 import { createMedalCollection } from './ui/medal-dialogs';
 import { createSettingsMenu } from './ui/menus';
 
@@ -39,17 +39,13 @@ export function createMainMenu(): Scene {
     tag: 'main-menu',
     opaque: true,
     bgm: 'menu',
-    element: h(
-      'div',
-      {},
-      h(
-        'div',
-        { class: 'main-menu-buttons' },
-        button('START', () => scenes.push(createSpaceScene())),
-        button('SETTINGS', () => scenes.push(createSettingsMenu())),
-        button('MEDALS', () => scenes.push(createMedalCollection())),
-        button('QUIT', () => scenes.reset(createQuitScreen())),
-      ),
+    element: mount(
+      <div class="main-menu-buttons">
+        <Button onClick={() => scenes.push(createSpaceScene())}>START</Button>
+        <Button onClick={() => scenes.push(createSettingsMenu())}>SETTINGS</Button>
+        <Button onClick={() => scenes.push(createMedalCollection())}>MEDALS</Button>
+        <Button onClick={() => scenes.reset(createQuitScreen())}>QUIT</Button>
+      </div>,
     ),
     update(dt) {
       zoom += dt / 50;
@@ -74,12 +70,14 @@ export function createMainMenu(): Scene {
 
 /** Shown after QUIT, since a web page cannot close itself. */
 function createQuitScreen(): Scene {
-  const element = h(
-    'div',
-    { class: 'quit-screen' },
-    h('div', { class: 'title-font', text: 'Thank you for playing!' }),
-    h('div', { class: 'quit-hint', text: 'Click to return to the title' }),
-  );
-  element.addEventListener('click', () => scenes.reset(createMainMenu()));
-  return { opaque: true, bgm: 'silence', element };
+  return {
+    opaque: true,
+    bgm: 'silence',
+    element: mount(
+      <div class="quit-screen" onClick={() => scenes.reset(createMainMenu())}>
+        <div class="title-font">Thank you for playing!</div>
+        <div class="quit-hint">Click to return to the title</div>
+      </div>,
+    ),
+  };
 }
