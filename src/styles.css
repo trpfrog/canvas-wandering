@@ -5,11 +5,7 @@
   src: url('./assets/font/dseg7-classic-bold.ttf') format('truetype');
 }
 
-@font-face {
-  font-family: 'Bungee Shade';
-  font-display: block;
-  src: url('./assets/font/bungee-shade-regular.ttf') format('truetype');
-}
+/* Bungee Shade comes from Google Fonts (see index.html). */
 
 :root {
   color-scheme: dark;

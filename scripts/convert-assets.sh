@@ -92,7 +92,6 @@ mp3 explosion se-explosion
 
 # fonts
 cp "$SRC/font/DSEG7Classic-Bold.ttf" "$OUT/font/dseg7-classic-bold.ttf"
-cp "$SRC/font/BungeeShade-Regular.ttf" "$OUT/font/bungee-shade-regular.ttf"
 cp "$SRC/font/DSEG-LICENSE.txt" "$OUT/font/DSEG-LICENSE.txt"
 
 du -sh "$OUT"
